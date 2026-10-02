@@ -52,3 +52,37 @@ GitHub), l'échec venait de la publication Supabase sans secrets. La publication
 ignorée si les secrets manquent, et un échec de publication n'interrompt plus le run ; les
 résultats s'affichent avant. Export de 3 calques climatiques (`climate.bin.gz`) et globe 3D
 dans le viewer.
+
+**#001 avec le climat Beyer 2020 (v0.2.2, runs GitHub A-6 et B-5)**
+
+| Région | A · monde vide | B · Eurasie habitée | Cible |
+|---|---|---|---|
+| Levant | 116,5k ✓ | 113,5k ✓ | 130–50k |
+| Asie du Sud | 113,5k | 85k | 80–45k |
+| Chine du Sud | 107k | 65k ✓ | 80–40k |
+| Europe | 114,5k | 101,5k | 55–42k |
+| Australie | 95k | 33,5k (trop tard) | 65–45k |
+| Japon | 100,5k | 49k | 40–30k |
+| Arctique sibérien, Amériques | jamais | jamais | 45–12k |
+
+Ce que le vrai climat a changé et n'a pas changé :
+1. Le Sahara et l'Arabie restent franchissables dès 117k, même avec le climat réel : la sortie
+   précoce d'Afrique ne venait donc pas seulement du climat provisoire. Le moteur ne connaît
+   aucun seuil de viabilité en désert (eau douce, rayon de fourrage) : la capacité de charge
+   descend linéairement avec la NPP sans jamais devenir nulle.
+2. Avec les vraies calottes et les vraies températures, plus personne n'atteint la Sibérie
+   arctique ni la Béringie, donc ni les Amériques. Cause : `t_min = -12 °C` (tolérance au froid
+   sans technologie). Résultat attendu et instructif : franchir l'Arctique exige des vêtements
+   cousus, du feu, des abris, c'est-à-dire la couche culturelle (V0.4), pas un réglage.
+3. En B, l'Australie devient trop tardive (33k) : la ceinture archaïque d'Asie du Sud-Est
+   ralentit trop la traversée de Wallacea.
+4. Les seeds restent quasi identiques (±500 ans) : la contingence explicite reste à construire.
+
+Priorités moteur qui en découlent (V0.3) : seuil de viabilité aride lié à l'eau douce ;
+tolérance au froid portée par une capacité culturelle plutôt qu'une constante ; α remplacé par
+un avantage émergent (V0.4).
+
+**Viewer v0.3.0** — `/` devient le simulateur plein écran (globe sur fond spatial, interface
+qui s'efface après 3 s d'inactivité, lecture automatique) ; l'ancienne page détaillée passe sur
+`/labo`. Le globe gère l'absence de WebGL (message clair, repli sur la carte dans `/labo`) au
+lieu de faire planter toute la page. Les runs de démo sont désormais les vrais runs Beyer.

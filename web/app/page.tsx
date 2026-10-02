@@ -1,5 +1,5 @@
-import Viewer from "@/components/Viewer";
+import Simulator from "@/components/Simulator";
 
 export default function Page() {
-  return <Viewer />;
+  return <Simulator />;
 }

@@ -5,7 +5,37 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { paintFrame, type Layer, type RunData } from "@/lib/paint";
 
-type Props = { data: RunData; frame: number; layer: Layer };
+type Props = {
+  data: RunData;
+  frame: number;
+  layer: Layer;
+  /** Fond spatial : étoiles + léger ombrage, style « vue depuis l'espace » */
+  space?: boolean;
+  className?: string;
+  onError?: (message: string) => void;
+};
+
+/** Champ d'étoiles fixe (générateur pseudo-aléatoire déterministe). */
+function makeStars(): THREE.Points {
+  let seed = 7;
+  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  const n = 1800;
+  const pos = new Float32Array(n * 3);
+  const col = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) {
+    const u = rnd() * 2 - 1;
+    const t = rnd() * Math.PI * 2;
+    const r = 40 + rnd() * 20;
+    const k = Math.sqrt(1 - u * u);
+    pos.set([r * k * Math.cos(t), r * u, r * k * Math.sin(t)], i * 3);
+    const b = 0.25 + 0.75 * rnd() ** 3;
+    col.set([b, b, b * (0.92 + 0.08 * rnd())], i * 3);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+  g.setAttribute("color", new THREE.BufferAttribute(col, 3));
+  return new THREE.Points(g, new THREE.PointsMaterial({ size: 1.4, sizeAttenuation: false, vertexColors: true, depthWrite: false }));
+}
 
 // Point de vue initial : Afrique de l'Est, berceau de l'expérience
 const START_LON = 35;
@@ -18,7 +48,7 @@ function directionFor(lonDeg: number, latDeg: number) {
   return new THREE.Vector3(Math.cos(lat) * Math.cos(lon), Math.sin(lat), -Math.cos(lat) * Math.sin(lon));
 }
 
-export default function Globe({ data, frame, layer }: Props) {
+export default function Globe({ data, frame, layer, space = false, className = "globe", onError }: Props) {
   const mountRef = useRef<HTMLDivElement>(null);
   const paintRef = useRef<{ canvas: HTMLCanvasElement; texture: THREE.CanvasTexture; render: () => void } | null>(null);
 
@@ -28,7 +58,13 @@ export default function Globe({ data, frame, layer }: Props) {
     if (!mount) return;
     const { nx, ny } = data.manifest.grid;
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    let renderer: THREE.WebGLRenderer;
+    try {
+      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: !space });
+    } catch {
+      onError?.("WebGL est indisponible dans ce navigateur. Activez l'accélération matérielle ou essayez un autre navigateur.");
+      return;
+    }
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     mount.appendChild(renderer.domElement);
@@ -45,8 +81,21 @@ export default function Globe({ data, frame, layer }: Props) {
     texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
     texture.magFilter = THREE.NearestFilter;
 
-    const globe = new THREE.Mesh(new THREE.SphereGeometry(1, 192, 128), new THREE.MeshBasicMaterial({ map: texture }));
+    const material = space ? new THREE.MeshLambertMaterial({ map: texture }) : new THREE.MeshBasicMaterial({ map: texture });
+    const globe = new THREE.Mesh(new THREE.SphereGeometry(1, 192, 128), material);
     scene.add(globe);
+    let stars: THREE.Points | null = null;
+    if (space) {
+      scene.background = new THREE.Color("#000000");
+      stars = makeStars();
+      scene.add(stars);
+      // Lumière attachée à la caméra : relief sans face nocturne qui cacherait les données
+      scene.add(new THREE.AmbientLight(0xffffff, 1.6));
+      const key = new THREE.DirectionalLight(0xffffff, 1.5);
+      key.position.set(-2, 1.5, 3);
+      camera.add(key);
+      scene.add(camera);
+    }
 
     // Liseré d'atmosphère (Fresnel), purement décoratif et discret
     const atmosphere = new THREE.Mesh(
@@ -87,7 +136,9 @@ export default function Globe({ data, frame, layer }: Props) {
     };
     loop();
 
-    let framed = false;
+    // Recadrage automatique tant que l'utilisateur n'a pas zoomé lui-même
+    let userMoved = false;
+    controls.addEventListener("start", () => (userMoved = true));
     const resize = () => {
       const w = mount.clientWidth;
       const h = mount.clientHeight;
@@ -96,14 +147,13 @@ export default function Globe({ data, frame, layer }: Props) {
       renderer.domElement.style.height = "100%";
       camera.aspect = w / Math.max(1, h);
       camera.updateProjectionMatrix();
-      if (!framed && w > 0 && h > 0) {
+      if (!userMoved && w > 0 && h > 0) {
         // Distance qui fait tenir le globe entier, avec une marge, quelle que soit la forme de l'écran
         const v = (camera.fov * Math.PI) / 180;
         const hz = 2 * Math.atan(Math.tan(v / 2) * camera.aspect);
-        const d = 1.18 / Math.sin(Math.min(v, hz) / 2);
+        const d = (space ? 1.32 : 1.18) / Math.sin(Math.min(v, hz) / 2);
         camera.position.setLength(d);
         controls.maxDistance = d * 1.5;
-        framed = true;
       }
     };
     const ro = new ResizeObserver(resize);
@@ -120,12 +170,17 @@ export default function Globe({ data, frame, layer }: Props) {
       globe.geometry.dispose();
       (globe.material as THREE.Material).dispose();
       atmosphere.geometry.dispose();
+      if (stars) {
+        stars.geometry.dispose();
+        (stars.material as THREE.Material).dispose();
+      }
       (atmosphere.material as THREE.Material).dispose();
       renderer.dispose();
       mount.removeChild(renderer.domElement);
       paintRef.current = null;
     };
-  }, [data]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data, space]);
 
   // Mise à jour de la texture quand la frame ou le calque change
   useEffect(() => {
@@ -140,6 +195,6 @@ export default function Globe({ data, frame, layer }: Props) {
   }, [data, frame, layer]);
 
   return (
-    <figure className="globe" ref={mountRef} role="img" aria-label="Globe : faites glisser pour tourner, molette ou pincement pour zoomer" />
+    <figure className={className} ref={mountRef} role="img" aria-label="Globe : faites glisser pour tourner, molette ou pincement pour zoomer" />
   );
 }

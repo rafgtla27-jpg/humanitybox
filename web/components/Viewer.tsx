@@ -102,7 +102,7 @@ export default function Viewer() {
   return (
     <main className="shell" onKeyDown={onKey}>
       <header className="masthead">
-        <span className="wordmark">WORLD_SIM</span>
+        <a className="wordmark" href="/">WORLD_SIM</a>
         <h1>Des humains sans technologie se dispersent-ils de façon crédible sur une Terre qui change&nbsp;?</h1>
         <p className="lede">
           Experiment #001, de 120&nbsp;000 à 10&nbsp;000 ans avant le présent. Relief réel, niveau marin reconstruit,{" "}
@@ -127,7 +127,7 @@ export default function Viewer() {
       {data ? (
         <>
           <Controls data={data} view={view} setView={setView} layer={layer} setLayer={setLayer} />
-          {view === "globe" ? <Globe data={data} frame={frame} layer={layer} /> : <MapCanvas data={data} frame={frame} layer={layer} />}
+          {view === "globe" ? <Globe data={data} frame={frame} layer={layer} onError={() => setView("map")} /> : <MapCanvas data={data} frame={frame} layer={layer} />}
           <Readout
             data={data}
             frame={frame}
