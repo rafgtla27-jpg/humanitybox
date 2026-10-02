@@ -38,6 +38,9 @@ def main():
     ap.add_argument("--climate", choices=["parametric", "beyer"], default="parametric")
     ap.add_argument("--no-frames", action="store_true", help="aucune frame (seeds d'ensemble au-delà de la première)")
     ap.add_argument("--summary", action="store_true", help="résume tous les runs de outputs/ en distributions")
+    ap.add_argument("--set", action="append", default=[], metavar="CLÉ=VALEUR",
+                    help="surcharge un paramètre (ex. cold_ncrit=500, advantage=0.05) — calibration")
+    ap.add_argument("--variant", default="", help="nom de la variante (calibration), stocké dans le manifest")
     a = ap.parse_args()
 
     if a.summary:
@@ -52,15 +55,27 @@ def main():
     else:
         earth = ParametricPaleoEarth(grid)
     label, kw = SCENARIOS[a.scenario]
+    kw = dict(kw)
+    overrides = {}
+    for item in a.set:
+        key, _, value = item.partition("=")
+        overrides[key.strip()] = float(value)
+    adv = overrides.pop("advantage", None)
+    if adv is not None:
+        # Avantage compétitif de sapiens, symétrique : α_sa = 1 − a, α_as = 1 + a
+        kw.update(archaics=True, alpha_sa=1 - adv, alpha_as=1 + adv)
+        label = f"Eurasie habitée (a = {adv:g})"
+    params = HumanParams(**overrides)
     seeds = [int(s) for s in a.seeds.split(",")]
     for i, seed in enumerate(seeds):
         t = time.time()
-        r = run(seed=seed, grid=grid, earth=earth, snapshot_every=2000 if i == 0 and not a.no_frames else None, **kw)
+        r = run(seed=seed, grid=grid, earth=earth, snapshot_every=2000 if i == 0 and not a.no_frames else None, params=params, **kw)
         print(f"[{a.scenario}] {label} seed={seed}  {time.time() - t:.0f}s")
-        out = OUT / f"{a.scenario}_{a.climate}_seed{seed}"
+        out = OUT / (f"{a.scenario}_{a.climate}_{a.variant}_seed{seed}" if a.variant else f"{a.scenario}_{a.climate}_seed{seed}")
         meta = {
             "experiment_id": EXPERIMENT, "scenario": a.scenario, "label": label, "seed": seed,
-            "params": {**dataclasses.asdict(HumanParams()), **kw}, "climate_provider": earth.name,
+            "params": {**dataclasses.asdict(params), **kw}, "climate_provider": earth.name,
+            "variant": a.variant,
             "start_year": -120_000, "end_year": -10_000,
         }
         manifest = export_run(r, grid, out, meta)
@@ -84,7 +99,7 @@ def summary():
     from worldsim.ensemble import load_manifests, summarize
     sums = summarize(load_manifests(OUT))
     for sm in sums:
-        name = f"ensemble_{sm['scenario']}_{sm['climate_provider']}_{sm['engine_version']}.json"
+        name = f"ensemble_{sm['scenario']}_{sm['climate_provider']}_{sm['engine_version']}{'_' + sm['variant'] if sm['variant'] else ''}.json"
         (OUT / name).write_text(json.dumps(sm, ensure_ascii=False, indent=1))
         print(f"\n{sm['scenario']} · {sm['label']} · {sm['climate_provider']} · moteur {sm['engine_version']} · {sm['n_runs']} runs")
         for r in sm["regions"]:

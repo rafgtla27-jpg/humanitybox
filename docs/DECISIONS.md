@@ -137,3 +137,32 @@ densité devient un voile ocre : en vue d'ensemble on lit la dispersion, de prè
 
 Prochaine étape V0.3 : calibration honnête des paramètres culturels (gain, perte, seuil) sur
 Europe + Sibérie avec ensembles, validation sur Sahul et Amériques. Nécessite les runs Beyer.
+
+**Ensembles Beyer, moteur 0.3.1 (20 mondes par scénario, 4 min sur GitHub)**
+
+| Région | A · monde vide | B · Eurasie habitée (a = 0,1) | Cible |
+|---|---|---|---|
+| Levant | 100 % ✓ (115k) | 100 % ✓ (90–112k) | 130–50k |
+| Asie du Sud | 0 % (112,5k) | 10 % (31,5–48k) | 80–45k |
+| Chine du Sud | 0 % (106k) | 0 % (13,5–30k) | 80–40k |
+| Europe | 0 % (112k) | 0 % (89–94k) | 55–42k |
+| Australie | 0 % (94k) | jamais | 65–45k |
+| Japon | 0 % (100k) | 5 % atteinte (11,5k) | 40–30k |
+| Arctique, Amériques | jamais | jamais | 45–12k |
+
+Lecture :
+1. La contingence est réelle en B : selon le monde, l'Asie du Sud est atteinte entre 48k et 31,5k,
+   la Chine entre 30k et 13,5k. En A, tout reste quasi déterministe (le front avance sans obstacle).
+2. La vérité est entre A et B : A est 40 à 60 000 ans trop rapide, B trop lent vers l'est et
+   pourtant trop rapide vers l'Europe. L'avantage compétitif a = 0,1 ne convient pas tel quel.
+3. Europe trop tôt en B : sapiens apprend l'adaptation au froid (jusqu'à c ≈ 0,9) plus vite que la
+   valeur fixée pour les Néandertaliens (0,4) et les remplace dès ~90k. `cold_gain` est trop fort.
+4. Arctique jamais atteint, même en A. Diagnostic sur les frames : au-delà de 60° N, la densité est
+   si faible que le voisinage 3×3 compte moins de 2 000 personnes ; l'adaptation s'y perd (effet
+   Tasmanie) et le front recule (15 % des cellules de 65–72° N occupées à 80k, 0 % ensuite).
+   `cold_ncrit` est trop exigeant pour des chasseurs arctiques très mobiles et très dispersés.
+
+Décision : calibrer `advantage`, `cold_gain` et `cold_ncrit` sur une grille de 18 variantes
+(workflow `calibrate`), classement sur Levant, Europe, Asie du Sud, Arctique sibérien uniquement ;
+Chine, Australie, Japon et Amériques restent en test. `advantage` est un paramètre provisoire que la
+V0.4 doit remplacer par un avantage culturel émergent.

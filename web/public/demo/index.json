@@ -1,6 +1,4 @@
 [
-  { "dir": "A", "title": "A — Monde vide", "detail": "climat Beyer 2020, moteur 0.2, seed 1" },
-  { "dir": "B", "title": "B — Eurasie habitée", "detail": "archaïques en compétition, climat Beyer 2020, moteur 0.2, seed 1" },
-  { "dir": "A3", "title": "A — aperçu moteur 0.3", "detail": "rivières, eau douce, adaptation au froid ; climat provisoire" },
-  { "dir": "B3", "title": "B — aperçu moteur 0.3, 5 mondes", "detail": "contingence + ensemble de 5 seeds ; climat provisoire", "ensemble": "ensemble_B3.json" }
+  { "dir": "B", "title": "B — Eurasie habitée", "detail": "climat Beyer 2020, moteur 0.3.1, 20 mondes", "ensemble": "ensemble_B.json" },
+  { "dir": "A", "title": "A — Monde vide", "detail": "climat Beyer 2020, moteur 0.3.1, 20 mondes", "ensemble": "ensemble_A.json" }
 ]

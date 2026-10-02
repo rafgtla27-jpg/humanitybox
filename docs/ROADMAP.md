@@ -48,7 +48,7 @@ du projet.
 | V0.0 | Terre réelle (ETOPO) | aucun | pipeline géospatial | carte 2D | ✅ |
 | V0.1 | Terre paléo paramétrique | cohortes | dispersion, niveau marin | GIF + viewer web, frise | ✅ |
 | V0.2 | Terre paléo Beyer 2020 | cohortes + archaïques | dates d'arrivée vs archéologie | **globe 3D** (R1, livré en avance) + calques climat | ✅ résultats lus (voir DECISIONS) |
-| V0.3 | idem | ✅ eau douce + rivières émergentes, ✅ adaptation au froid culturelle, ✅ contingence explicite (bruit démographique, pionniers) ; à faire : calibration, refuges, goulots | ✅ P(arrivée) sur ensembles (workflow parallèle) ; à faire : calibration/validation séparées | ✅ rivières, calque culture, distributions dans /labo | 🔧 en cours |
+| V0.3 | idem | ✅ eau douce + rivières émergentes, ✅ adaptation au froid culturelle, ✅ contingence explicite (bruit démographique, pionniers) ; à faire : calibration, refuges, goulots | ✅ P(arrivée) sur ensembles (20 mondes Beyer lus) ; 🔧 calibration (workflow `calibrate`, entraînement/test séparés) | ✅ rivières, calque culture, distributions dans /labo | 🔧 en cours |
 | V0.4 | −50k → −5k | culture cumulative simple, oubli technologique, avantage compétitif émergent (remplace α) | sortie d'Afrique ~60k sans α fixé à la main | timeline des savoirs par région | ⏳ |
 | V0.5 | Holocène | plantes/animaux exploitables (traits), domestication | P(agriculture) par foyer (Croissant fertile, Chine, Mésoamérique, Andes, Nouvelle-Guinée, Sahel) | carte des foyers + probabilités | ⏳ |
 | V0.6 | Holocène + sols (SoilGrids comme ancre) | stockage, sédentarisation, villages, maladies (zoonoses) | densités, croissance post-agricole | **carte stratégique** (R2) : villages, réseaux | ⏳ |

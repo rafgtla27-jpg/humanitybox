@@ -22,9 +22,9 @@ def load_manifests(root: Path) -> list[dict]:
 def summarize(manifests: list[dict]) -> list[dict]:
     groups: dict[tuple, list[dict]] = defaultdict(list)
     for m in manifests:
-        groups[(m["experiment_id"], m["scenario"], m["climate_provider"], m["engine_version"])].append(m)
+        groups[(m["experiment_id"], m["scenario"], m["climate_provider"], m["engine_version"], m.get("variant", ""))].append(m)
     out = []
-    for (exp, scen, climate, engine), ms in sorted(groups.items()):
+    for (exp, scen, climate, engine, variant), ms in sorted(groups.items()):
         regions = []
         for k, row in enumerate(ms[0]["regions"]):
             arrivals = [m["regions"][k]["model_bp"] for m in ms]
@@ -38,6 +38,7 @@ def summarize(manifests: list[dict]) -> list[dict]:
                 "p10": q[0], "median": q[1], "p90": q[2],
             })
         out.append({"experiment_id": exp, "scenario": scen, "label": ms[0]["label"], "climate_provider": climate,
+                    "variant": variant, "params": ms[0].get("params", {}),
                     "engine_version": engine, "n_runs": len(ms), "seeds": sorted(m["seed"] for m in ms),
                     "regions": regions})
     return out

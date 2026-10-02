@@ -88,3 +88,29 @@ def test_contingency_makes_worlds_differ_but_seed_is_reproducible():
     a2 = run(seed=1, start=-120_000, end=-116_000, grid=GRID, earth=EARTH)
     assert a.tracker.total == a2.tracker.total
     assert a.tracker.total != b.tracker.total
+
+
+def test_calibration_ranks_on_train_only(tmp_path):
+    import json
+
+    from worldsim.calibration import TEST, TRAIN, report, variants
+    assert len(variants()) == 18
+    assert not set(TRAIN) & set(TEST)
+    regions_all = TRAIN + TEST
+
+    def manifest(variant, seed, good_train, good_test):
+        rows = []
+        for r in regions_all:
+            good = good_train if r in TRAIN else good_test
+            rows.append({"region": r, "target": [60000, 40000], "model_bp": 50000 if good else 90000, "verdict": ""})
+        return {"experiment_id": "e", "scenario": "B", "label": "B", "climate_provider": "c", "engine_version": "x",
+                "seed": seed, "variant": variant, "params": {"alpha_sa": 0.9, "cold_gain": 1e-4, "cold_ncrit": 500},
+                "regions": rows}
+    for v, gt, gs in [("v00", True, False), ("v01", False, True)]:
+        for seed in (1, 2):
+            d = tmp_path / f"{v}_{seed}"
+            d.mkdir()
+            (d / "manifest.json").write_text(json.dumps(manifest(v, seed, gt, gs)))
+    res = report(tmp_path)
+    # v00 gagne sur l'entraînement même si v01 serait meilleure en test : on ne triche pas
+    assert res["chosen"]["variant"] == "v00" and res["chosen"]["test"] == 0
