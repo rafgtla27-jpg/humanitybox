@@ -34,3 +34,9 @@ Eurasie habitée (α 0.9/1.1) : Chine du Sud et Australie dans les fourchettes, 
 trop tôt, Sibérie arctique et Amériques jamais atteintes. Le calendrier dépend surtout de α :
 la question « pourquoi 60k et pas 120k » devient « qu'est-ce qui fait gagner sapiens », à faire
 émerger de la couche culturelle plutôt que de fixer à la main.
+
+**v0.2.0** — `BeyerPaleoEarth` : température, précipitations, NPP, glaces (biome 28), altitude,
+rugosité et trait de côte de Beyer et al. 2020 (version pastclim, Zenodo 7388091), agrégés à 1°
+et interpolés entre tranches. NPP convertie de gC en matière sèche (× 2,2) pour garder
+`HumanParams` inchangé. Lecteur testé sur fichier synthétique ; à confirmer sur le vrai fichier
+(`scripts/inspect_netcdf.py` affiche sa structure dans les logs du workflow).

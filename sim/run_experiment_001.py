@@ -3,6 +3,7 @@ WORLD_SIM — Experiment #001 : dispersion d'Homo sapiens, 120 000 → 10 000 BP
 
     python run_experiment_001.py --scenario A --seeds 1,2,3            # local
     python run_experiment_001.py --scenario B --seeds 1 --gif          # + GIF
+    python run_experiment_001.py --scenario B --climate beyer          # paléoclimat réel (fetch_data.py --beyer)
     python run_experiment_001.py --scenario B --seeds 1,2,3 --publish  # + Supabase (CI)
     python run_experiment_001.py --chart                               # graphique depuis outputs/
 
@@ -34,20 +35,25 @@ def main():
     ap.add_argument("--gif", action="store_true")
     ap.add_argument("--publish", action="store_true")
     ap.add_argument("--chart", action="store_true")
+    ap.add_argument("--climate", choices=["parametric", "beyer"], default="parametric")
     a = ap.parse_args()
 
     if a.chart:
         return chart()
 
     grid = Grid(1.0)
-    earth = ParametricPaleoEarth(grid)
+    if a.climate == "beyer":
+        from worldsim.beyer import BeyerPaleoEarth
+        earth = BeyerPaleoEarth(grid)
+    else:
+        earth = ParametricPaleoEarth(grid)
     label, kw = SCENARIOS[a.scenario]
     seeds = [int(s) for s in a.seeds.split(",")]
     for i, seed in enumerate(seeds):
         t = time.time()
         r = run(seed=seed, grid=grid, earth=earth, snapshot_every=2000 if i == 0 else None, **kw)
         print(f"[{a.scenario}] {label} seed={seed}  {time.time() - t:.0f}s")
-        out = OUT / f"{a.scenario}_seed{seed}"
+        out = OUT / f"{a.scenario}_{a.climate}_seed{seed}"
         meta = {
             "experiment_id": EXPERIMENT, "scenario": a.scenario, "label": label, "seed": seed,
             "params": {**dataclasses.asdict(HumanParams()), **kw}, "climate_provider": earth.name,
@@ -56,7 +62,7 @@ def main():
         manifest = export_run(r, grid, out, meta)
         if a.gif and i == 0:
             from worldsim.render import make_gif
-            make_gif(grid, r.snapshots, str(OUT / f"experiment_001_{a.scenario}.gif"), f"WORLD_SIM #001 · {label}")
+            make_gif(grid, r.snapshots, str(OUT / f"experiment_001_{a.scenario}_{a.climate}.gif"), f"WORLD_SIM #001 · {label} · {earth.name}")
         if a.publish:
             from worldsim.publish import publish_run
             print("  publié :", publish_run(out, manifest))
@@ -69,7 +75,7 @@ def chart():
     results = {}
     for m in sorted(OUT.glob("*_seed*/manifest.json")):
         d = json.loads(m.read_text())
-        results.setdefault(f"{d['scenario']} · {d['label']}", []).append(
+        results.setdefault(f"{d['scenario']} · {d['label']} · {d['climate_provider']}", []).append(
             [{**r, "target": tuple(r["target"])} for r in d["regions"]])
     validation_chart(results, str(OUT / "experiment_001_validation.png"))
     print("->", OUT / "experiment_001_validation.png")

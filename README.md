@@ -21,6 +21,23 @@ web/        viewer Next.js (Vercel) : carte animée, frise niveau marin / arriv�
 Un run de 110 000 ans à 1° prend 30 à 50 s sur un CPU. Les ensembles (dizaines de seeds,
 balayages de paramètres) tournent dans Actions ou sur ta machine, jamais sur Vercel.
 
+## Mettre le projet sur GitHub (première fois)
+
+Le dossier `.git` ne s'envoie pas à la main : c'est l'historique local, `git push` s'en charge.
+Ce zip n'en contient pas, tu crées le tien :
+
+```bash
+cd world-sim                      # le dossier qui contient README.md, sim/, web/
+git init
+git add .
+git commit -m "WORLD_SIM v0.1"
+git branch -M main
+git remote add origin https://github.com/TON_COMPTE/world-sim.git
+git push -u origin main
+```
+
+Le dépôt GitHub doit être créé **vide** (sans README, .gitignore ni licence).
+
 ## Démarrer en local
 
 ```bash
@@ -29,6 +46,8 @@ pip install -e ".[dev]"
 python scripts/fetch_data.py          # relief ETOPO1 10' (~4,7 Mo)
 python -m pytest -q
 python run_experiment_001.py --scenario B --seeds 1,2,3 --gif
+python scripts/fetch_data.py --beyer  # paléoclimat Beyer et al. 2020 (gros fichier, Zenodo)
+python run_experiment_001.py --scenario B --climate beyer --gif
 python run_experiment_001.py --chart
 
 cd ../web

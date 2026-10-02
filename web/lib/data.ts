@@ -44,12 +44,12 @@ export async function listRuns(): Promise<RunRef[]> {
     }));
   }
   const res = await fetch(
-    `${SUPABASE_URL}/rest/v1/runs?select=id,scenario,label,seed,engine_version,created_at,storage_prefix` +
+    `${SUPABASE_URL}/rest/v1/runs?select=id,scenario,label,seed,engine_version,climate_provider,created_at,storage_prefix` +
       `&has_frames=eq.true&storage_prefix=not.is.null&order=created_at.desc&limit=30`,
     { headers: { apikey: ANON!, Authorization: `Bearer ${ANON}` } },
   );
   if (!res.ok) throw new Error(`Supabase a répondu ${res.status} en listant les runs.`);
-  const rows: { id: string; scenario: string; label: string; seed: number; engine_version: string; created_at: string; storage_prefix: string }[] =
+  const rows: { id: string; scenario: string; label: string; seed: number; engine_version: string; climate_provider: string; created_at: string; storage_prefix: string }[] =
     await res.json();
   return rows.map((r) => {
     const base = `${SUPABASE_URL}/storage/v1/object/public/runs/${r.storage_prefix}`;
@@ -57,7 +57,7 @@ export async function listRuns(): Promise<RunRef[]> {
     return {
       key: r.id,
       title: `${r.scenario} — ${r.label}`,
-      detail: `seed ${r.seed}, moteur ${r.engine_version}, ${date}`,
+      detail: `${r.climate_provider.startsWith("beyer") ? "climat Beyer 2020" : "climat provisoire"}, seed ${r.seed}, ${date}`,
       manifestUrl: `${base}/manifest.json`,
       baseUrl: base,
     };
