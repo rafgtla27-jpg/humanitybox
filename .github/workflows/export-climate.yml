@@ -1,0 +1,38 @@
+# Produit une version compacte (1°, ~20 Mo) du climat Beyer 2020 pour diagnostic hors GitHub.
+# Actions → export-climate → Run workflow, puis télécharger l'artifact « beyer2020-1deg ».
+name: export-climate
+
+on:
+  workflow_dispatch:
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: sim
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - uses: actions/cache@v4
+        with:
+          path: |
+            sim/data/etopo10_ice_g_i2.*
+            sim/data/ETOPO10_LICENSE
+          key: etopo10-v1
+      - uses: actions/cache@v4
+        with:
+          path: sim/data/Beyer2020_annual_vars_v1.2.2.nc
+          key: beyer2020-annual-v1.2.2
+      - run: pip install -e ".[climate]"
+      - run: python scripts/fetch_data.py --beyer
+      - run: python scripts/export_climate.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: beyer2020-1deg
+          path: sim/data/beyer2020_1deg.npz
+          compression-level: 0
+          retention-days: 30
