@@ -80,3 +80,14 @@ def test_partial_latitude_coverage_maps_to_global_grid(fake_beyer):
     assert s.land_frac.shape == (g.ny, g.nx) == s.temperature.shape == s.npp.shape
     assert s.land_frac[g.LAT < -60].max() == 0          # au sud de -60° : océan
     assert s.land_frac[g.box(-35, -30, 0, 40)].min() == 1  # le bloc de terre est bien à sa place
+
+
+def test_compact_npz_roundtrip(fake_beyer, tmp_path):
+    g = Grid(1.0)
+    full = BeyerPaleoEarth(g, fake_beyer)
+    path = full.save_npz(tmp_path / "b.npz")
+    small = BeyerPaleoEarth.from_npz(g, path)
+    a, b = full.state(-21000), small.state(-21000)
+    assert np.array_equal(a.ice, b.ice)
+    assert np.allclose(a.temperature, b.temperature, atol=0.05)
+    assert np.allclose(a.npp, b.npp, rtol=2e-3)

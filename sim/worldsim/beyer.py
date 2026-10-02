@@ -25,6 +25,7 @@ from scipy import ndimage
 from .earth import DATA, KM_PER_DEG, EarthState, Grid, monsoon_index, sea_level
 
 BEYER_FILE = DATA / "Beyer2020_annual_vars_v1.2.2.nc"
+BEYER_NPZ = DATA / "beyer2020_1deg.npz"  # version agrégée à 1° (~20 Mo), produite par scripts/export_climate.py
 BEYER_URL = "https://zenodo.org/record/7388091/files/Beyer2020_annual_vars_v1.2.2.nc?download=1"
 ICE_BIOME = 28
 GC_TO_DRY_MATTER = 2.2  # la matière sèche végétale contient ~45 % de carbone
@@ -116,6 +117,34 @@ class BeyerPaleoEarth:
         self.land_frac = _block_nanmean(land[order].astype(np.float32), f)
         self.ice_frac = _block_nanmean(ice[order].astype(np.float32), f)
         self._coast_cache: dict[int, np.ndarray] = {}  # par masque terre/mer
+
+    # --- Version compacte à 1° : permet de travailler sans le fichier netCDF de 323 Mo
+    def save_npz(self, path: Path = BEYER_NPZ) -> Path:
+        f16 = {f"f_{k}": v.astype(np.float16) for k, v in self.fields.items()}
+        np.savez_compressed(path, times=self.times, land_frac=self.land_frac.astype(np.float16),
+                            ice_frac=self.ice_frac.astype(np.float16), res=np.array(self.grid.res), **f16)
+        return Path(path)
+
+    @classmethod
+    def from_npz(cls, grid: Grid, path: Path = BEYER_NPZ) -> "BeyerPaleoEarth":
+        z = np.load(path)
+        if abs(float(z["res"]) - grid.res) > 1e-9:
+            raise ValueError(f"{path} est à {float(z['res'])}°, la grille à {grid.res}°")
+        self = cls.__new__(cls)
+        self.grid = grid
+        self.times = z["times"].astype(np.float64)
+        self.fields = {k[2:]: z[k].astype(np.float32) for k in z.files if k.startswith("f_")}
+        self.land_frac = z["land_frac"].astype(np.float32)
+        self.ice_frac = z["ice_frac"].astype(np.float32)
+        self._coast_cache = {}
+        return self
+
+    @classmethod
+    def load(cls, grid: Grid) -> "BeyerPaleoEarth":
+        """netCDF complet s'il est là, sinon la version compacte à 1°."""
+        if BEYER_FILE.exists() or not BEYER_NPZ.exists():
+            return cls(grid)
+        return cls.from_npz(grid)
 
     @property
     def span(self) -> tuple[int, int]:

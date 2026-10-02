@@ -52,7 +52,7 @@ def main():
     grid = Grid(1.0)
     if a.climate == "beyer":
         from worldsim.beyer import BeyerPaleoEarth
-        earth = BeyerPaleoEarth(grid)
+        earth = BeyerPaleoEarth.load(grid)
     else:
         earth = ParametricPaleoEarth(grid)
     label, kw = SCENARIOS[a.scenario]

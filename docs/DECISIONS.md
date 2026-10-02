@@ -222,3 +222,16 @@ Corrections (0.4.1), motivées par une région d'entraînement (Levant) :
    Vérifié en climat provisoire que la grille encadre le comportement : coin favorable → sortie
    et expansion (trop tôt) ; coin défavorable → blocage total ; points intermédiaires → sortie
    partielle (part max 27 % au Levant) ou blocage. La transition est abrupte, comme un seuil.
+
+**Calibration C v0.4.1 : toujours presque rien (meilleur : 4 % d'entraînement, Levant 17 %)**
+Indice décisif : avec archaic_C = 0,15, la variante à avantage faible (v00, adv 0,2) fait mieux que
+celle à avantage fort (v09, adv 0,4 : 0 %). Un avantage plus fort ne pénalise sapiens que si son
+répertoire au front est INFÉRIEUR à celui des archaïques. Donc, avec le climat réel, le front de
+sapiens arrive au Levant avec un répertoire < 0,15, alors que le même réglage en climat provisoire
+produit une expansion massive. Le climat réel rend le couloir de sortie (Sinaï, Nil, Arabie)
+beaucoup plus pauvre en population, donc en réseau social.
+
+Décision de méthode : arrêter les calibrations « à l'aveugle ». Je ne peux pas télécharger Beyer,
+donc chaque hypothèse coûtait un aller-retour complet. Le workflow `export-climate` produit une
+version compacte du climat (1°, ~20 Mo) ; avec elle, les diagnostics et les vérifications de
+grille se font en local, sur le vrai climat, avant de relancer une calibration.
