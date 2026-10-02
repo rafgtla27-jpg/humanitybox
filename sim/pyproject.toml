@@ -1,0 +1,15 @@
+[project]
+name = "worldsim"
+version = "0.1.0"
+description = "WORLD_SIM — laboratoire d'émergence historique (moteur de simulation)"
+requires-python = ">=3.11"
+dependencies = ["numpy>=1.26", "scipy>=1.11", "matplotlib>=3.8", "pillow>=10"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[tool.setuptools]
+packages = ["worldsim"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
