@@ -166,3 +166,38 @@ Décision : calibrer `advantage`, `cold_gain` et `cold_ncrit` sur une grille de 
 (workflow `calibrate`), classement sur Levant, Europe, Asie du Sud, Arctique sibérien uniquement ;
 Chine, Australie, Japon et Amériques restent en test. `advantage` est un paramètre provisoire que la
 V0.4 doit remplacer par un avantage culturel émergent.
+
+**Calibration v0.3.4 (scénario B, 18 variantes × 6 mondes, Beyer)** — meilleure variante v12
+(avantage 0,1 ; cold_gain 1/8000 ; cold_ncrit 500) : entraînement 38 %, test 17 % (Japon 67 %,
+Chine 17 %, Australie et Amériques 0 %).
+
+Lecture honnête :
+1. L'optimum touche le bord de la grille (avantage max, gain max, seuil min) : la grille était
+   trop étroite, mais surtout…
+2. …Europe et Arctique sont à 0 % dans les 18 variantes. Aucun réglage ne les sauve : c'est la
+   structure qui manque. Diagnostic sur les frames (B, seed 1) : sapiens s'infiltre dans l'Europe
+   néandertalienne dès 100k et la remplace entre 92k et 80k, alors que sa culture du froid est
+   encore quasi nulle. Un avantage CONSTANT dans le temps et l'espace ne peut pas à la fois laisser
+   échouer les sorties précoces (~120–90k) et faire réussir celle de ~60–50k.
+3. Fuite de test évitée : l'Australie (test) échoue, mais aucun mécanisme n'est ajouté pour elle
+   (route côtière, navigation). Toute modification motivée par une région de test la ferait
+   passer en entraînement.
+
+**Moteur 0.4.0 — complexité culturelle émergente (début de la V0.4)**
+Inspiré de Henrich (2004) et Powell, Shennan & Thomas (2009, Science) : la complexité culturelle
+dépend de la taille du réseau social, donc de la densité et de la connectivité.
+- Chaque cohorte porte un répertoire C ∈ [0, 1], transporté par la migration, qui tend (temps
+  caractéristique 3 000 ans) vers C* = log(n_réseau / cx_n0) / log(cx_span), réseau = population
+  dans un rayon de 2 cellules (~500 km).
+- L'avantage compétitif n'est plus fixe : α = 1 ∓ adv_max × (C_sapiens − C_archaïques), cellule par
+  cellule. Un groupe pionnier isolé (C érodé) perd face aux Néandertaliens ; une région dense le
+  gagne. Les archaïques ont un C fixe (`archaic_C`).
+- Coudre des vêtements exige un répertoire riche : le gain d'adaptation au froid est multiplié
+  par C. Le réseau du froid utilise le même rayon de 2 cellules (correction motivée par l'Arctique,
+  région d'entraînement).
+- Premier essai (climat provisoire) : avec les valeurs par défaut, les pionniers atteignent le
+  Levant mais y restent minoritaires (C ≈ 0,02–0,08 contre 0,35) pendant 60 000 ans ; dans le coin
+  le plus favorable de la nouvelle grille, la sortie réussit trop tôt. L'optimum est donc à
+  l'intérieur de la grille, contrairement à la calibration précédente.
+- Nouvelle calibration (scénario C) : adv_max {0,2 ; 0,4} × cx_n0 {2 000 ; 6 000 ; 20 000} ×
+  archaic_C {0,25 ; 0,4 ; 0,55}, mêmes régions d'entraînement et de test.

@@ -42,7 +42,15 @@ class HumanParams:
     cold_delta: float = 22.0    # °C gagnés sur t_min quand l'adaptation est complète (c = 1)
     cold_gain: float = 1 / 8000  # /an : vitesse d'innovation sous contrainte de froid
     cold_loss: float = 1 / 4000  # /an : perte quand le réseau humain est trop petit (effet Tasmanie)
-    cold_ncrit: float = 2000.0  # personnes dans le voisinage 3×3 nécessaires pour maintenir le savoir
+    cold_ncrit: float = 500.0   # personnes dans le réseau social nécessaires pour maintenir le savoir (calibré v0.3.4)
+    # --- V0.4 : complexité culturelle émergente (Henrich 2004 ; Powell, Shennan & Thomas 2009)
+    complexity: bool = False    # trait dynamique C ∈ [0, 1] porté par les cohortes
+    C_fixed: float | None = None  # valeur imposée (archaïques)
+    cx_n0: float = 10000.0      # population en réseau sous laquelle le répertoire s'érode vers 0
+    cx_span: float = 40.0       # C* = 1 atteint pour cx_n0 × cx_span personnes en réseau
+    cx_tau: float = 3000.0      # ans : temps de relaxation vers l'équilibre
+    adv_max: float = 0.3        # avantage compétitif pour un écart de complexité de 1
+    net_radius: int = 2         # rayon du réseau social, en cellules (2 → 5×5 ≈ 500 km)
     # --- V0.3 : contingence explicite
     demo_noise: float = 0.06    # /an : naissances + décès par personne (bruit démographique ∝ √N)
     ldd_rate: float = 1 / 4000  # /an par cellule à N = K : départ d'un groupe pionnier lointain
@@ -224,9 +232,28 @@ class Demography:
         N = Nf.reshape(N.shape).astype(np.float32)
         return N, (None if cf is None else cf.reshape(N.shape).astype(np.float32))
 
-    def _neighborhood(self, N: np.ndarray) -> np.ndarray:
+    def _neighborhood(self, N: np.ndarray, radius: int = 1) -> np.ndarray:
+        radius = min(radius, self.PAD)
         padded = self._pad(N)
-        return sum(self._view(padded, di, dj, N.shape) for di in (-1, 0, 1) for dj in (-1, 0, 1))
+        r = range(-radius, radius + 1)
+        return sum(self._view(padded, di, dj, N.shape) for di in r for dj in r)
+
+    def _complexity_alpha(self, sim, pops, alpha):
+        """Avantage compétitif émergent : il dépend de l'écart de complexité culturelle, cellule par
+        cellule. Un sapiens au répertoire appauvri peut perdre face aux Néandertaliens."""
+        names = list(pops)
+        if len(names) != 2:
+            return alpha
+        a, b = names
+        pa, pb = pops[a], pops[b]
+        if not (pa.complexity or pb.complexity):
+            return alpha
+        Ca = sim.state.get(f"complexity:{a}") if pa.C_fixed is None else pa.C_fixed
+        Cb = sim.state.get(f"complexity:{b}") if pb.C_fixed is None else pb.C_fixed
+        if Ca is None or Cb is None:
+            return alpha
+        adv = np.clip(max(pa.adv_max, pb.adv_max) * (np.asarray(Ca) - np.asarray(Cb)), -0.5, 0.5).astype(np.float32)
+        return {**alpha, (a, b): 1 - adv, (b, a): 1 + adv}
 
     def step(self, sim: Simulation, year: int, dt: int) -> None:
         """Toutes les populations partagent la même capacité de charge de base.
@@ -239,7 +266,7 @@ class Demography:
         T = sim.state["earth"].temperature
         coefs = self._static(sim)
         pops = sim.state["populations"]           # {nom: params}
-        alpha = sim.state.get("alpha", {})
+        alpha = self._complexity_alpha(sim, pops, sim.state.get("alpha", {}))
         current = {name: sim.state[name] for name in pops}
 
         for name, p in pops.items():
@@ -271,9 +298,15 @@ class Demography:
                 pressure = np.where(K > 0, np.clip(load / Ksafe, 0, 3), 3)
                 out_rate = np.clip((p.m_base + p.m_press * pressure) * dt, 0, 0.5).astype(np.float32)
                 hop_coefs = coefs if p.p_sea > 0 else coefs[:len(ADJ)]
-                if dynamic:
-                    N, (Nc,) = self.migrate(N, room, out_rate, hop_coefs, carried=(N * c,))
-                    c = np.where(N > 1e-9, np.clip(Nc / np.maximum(N, 1e-9), 0, 1), 0)
+                cx = sim.state.get(f"complexity:{name}") if p.complexity and p.C_fixed is None else None
+                carried = ([N * c] if dynamic else []) + ([N * cx] if cx is not None else [])
+                if carried:
+                    N, moved = self.migrate(N, room, out_rate, hop_coefs, carried=tuple(carried))
+                    safe = np.maximum(N, 1e-9)
+                    if dynamic:
+                        c = np.where(N > 1e-9, np.clip(moved.pop(0) / safe, 0, 1), 0)
+                    if cx is not None:
+                        sim.state[f"complexity:{name}"] = np.where(N > 1e-9, np.clip(moved.pop(0) / safe, 0, 1), 0).astype(np.float32)
                 else:
                     N = self.migrate(N, room, out_rate, hop_coefs)
 
@@ -298,11 +331,24 @@ class Demography:
 
             # 4. Culture : on innove sous la contrainte du froid si le réseau humain est assez grand,
             #    on oublie si le groupe est trop isolé (aucune technique n'est acquise pour toujours)
+            n_net = self._neighborhood(N, p.net_radius)
+            if p.complexity and p.C_fixed is None:
+                # Le répertoire culturel tend vers un équilibre fixé par la taille du réseau social :
+                # grand réseau → techniques complexes maintenues ; petit réseau → érosion.
+                C = sim.state.get(f"complexity:{name}")
+                target = np.clip(np.log(np.maximum(n_net, 1) / p.cx_n0) / np.log(p.cx_span), 0, 1)
+                if C is None:
+                    C = target
+                C = C + (target - C) * (1 - np.exp(-dt / p.cx_tau))
+                sim.state[f"complexity:{name}"] = np.where(N > 0, C, 0).astype(np.float32)
             if dynamic:
-                n_eff = self._neighborhood(N)
+                n_eff = n_net
                 stressed = T < p.t_ok + 5
                 big = n_eff >= p.cold_ncrit
-                gain = np.where(big & stressed, p.cold_gain * dt * (1 - c), 0)
+                rate = p.cold_gain
+                if p.complexity and p.C_fixed is None:
+                    rate = p.cold_gain * sim.state[f"complexity:{name}"]  # coudre des vêtements exige un répertoire riche
+                gain = np.where(big & stressed, rate * dt * (1 - c), 0)
                 loss = np.where(~big, p.cold_loss * dt * c, 0)
                 c = np.where(N > 0, np.clip(c + gain - loss, 0, 1), 0)
                 sim.state[f"culture:{name}"] = c.astype(np.float32)

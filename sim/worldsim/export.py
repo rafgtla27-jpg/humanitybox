@@ -27,7 +27,7 @@ import numpy as np
 
 from .earth import Grid, monsoon_index, sea_level
 
-ENGINE_VERSION = "0.3.1"
+ENGINE_VERSION = "0.4.0"
 LO, HI = 1e-3, 0.5  # hab/km²
 T_RANGE = (-40.0, 35.0)    # °C
 P_RANGE = (10.0, 4000.0)   # mm/an
@@ -36,6 +36,7 @@ Q_RANGE = (10.0, 1e5)      # m³/s
 EXTRA_SPECS = {
     "rivers": {"label": "Rivières", "min": Q_RANGE[0], "max": Q_RANGE[1], "scale": "log10", "unit": "m³/s"},
     "cold": {"label": "Adaptation au froid", "min": 0, "max": 1, "scale": "linear", "unit": ""},
+    "complexity": {"label": "Complexité culturelle", "min": 0, "max": 1, "scale": "linear", "unit": ""},
 }
 
 
@@ -43,7 +44,7 @@ def encode_extra(name: str, a: np.ndarray, land: np.ndarray) -> np.ndarray:
     if name == "rivers":
         t = (np.log10(np.maximum(a, 1e-9)) - np.log10(Q_RANGE[0])) / (np.log10(Q_RANGE[1]) - np.log10(Q_RANGE[0]))
         return _q(t, land & (a >= Q_RANGE[0]))
-    if name == "cold":
+    if name in ("cold", "complexity"):
         return _q(a, land & np.isfinite(a))
     raise KeyError(name)
 

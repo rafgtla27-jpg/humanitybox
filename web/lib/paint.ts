@@ -1,6 +1,7 @@
 import type { Manifest } from "./data";
 
-export type Layer = "humans" | "temperature" | "precipitation" | "npp" | "cold";
+export type Layer = "humans" | "temperature" | "precipitation" | "npp" | "cold" | "complexity";
+const EXTRA_LAYERS: Layer[] = ["cold", "complexity"];
 
 export const LAYERS: { id: Layer; label: string }[] = [
   { id: "humans", label: "Humains" },
@@ -8,13 +9,14 @@ export const LAYERS: { id: Layer; label: string }[] = [
   { id: "precipitation", label: "Précipitations" },
   { id: "npp", label: "Productivité végétale" },
   { id: "cold", label: "Adaptation au froid" },
+  { id: "complexity", label: "Complexité culturelle" },
 ];
 
 /** Calques réellement disponibles pour un run (les anciens runs n'ont pas tout). */
 export function availableLayers(data: RunData) {
   return LAYERS.filter((l) => {
     if (l.id === "humans") return true;
-    if (l.id === "cold") return extraIndex(data, "cold") >= 0;
+    if (EXTRA_LAYERS.includes(l.id)) return extraIndex(data, l.id) >= 0;
     return data.climate !== null;
   });
 }
@@ -39,6 +41,7 @@ export const RAMPS: Record<Exclude<Layer, "humans">, [number, string][]> = {
   precipitation: [[0, "#d9c79b"], [0.35, "#c9c27d"], [0.6, "#7fae6e"], [0.82, "#3f8a83"], [1, "#2a5f93"]],
   npp: [[0, "#6e6250"], [0.3, "#9a9a5c"], [0.65, "#79a453"], [1, "#2f6e35"]],
   cold: [[0, "#e3a13b"], [0.35, "#c9b48a"], [0.65, "#7fb3cf"], [1, "#eaf6fb"]],
+  complexity: [[0, "#5a3d6e"], [0.35, "#9a5f8a"], [0.6, "#d98a6a"], [0.8, "#f0c062"], [1, "#fff1b8"]],
 };
 const RIVER: RGB = [96, 170, 214];
 // Seuil d'affichage : à 1° presque toute cellule humide draine > 10 m³/s ;
@@ -93,7 +96,7 @@ export function paintFrame(
     const o = frame * nExtra * plane + k * plane;
     return data.extra.subarray(o, o + plane);
   };
-  if (layer === "cold") clim = extraPlane("cold");
+  if (EXTRA_LAYERS.includes(layer)) clim = extraPlane(layer);
   const rivers = extraPlane("rivers");
   // Sol « naturel » (végétation atténuée) sous les humains quand les silhouettes portent la population
   const natural = opts.naturalGround && layer === "humans" && data.climate
@@ -119,7 +122,7 @@ export function paintFrame(
           R = lut[q * 3];
           G = lut[q * 3 + 1];
           B = lut[q * 3 + 2];
-        } else [R, G, B] = layer === "cold" ? [92, 85, 74] : COLORS.land;
+        } else [R, G, B] = EXTRA_LAYERS.includes(layer) ? [92, 85, 74] : COLORS.land;
       } else {
         [R, G, B] = COLORS.land;
         if (natural && natural[i]) {
@@ -163,6 +166,7 @@ export function paintFrame(
 /** Libellés de légende pour un calque climatique. */
 export function legendFor(m: Manifest, layer: Exclude<Layer, "humans">): { min: string; max: string; unit: string } {
   if (layer === "cold") return { min: "aucune", max: "complète (≈ −34 °C)", unit: "" };
+  if (layer === "complexity") return { min: "répertoire érodé", max: "répertoire riche", unit: "" };
   const spec = m.climate?.[layer];
   if (!spec) return { min: "", max: "", unit: "" };
   return { min: String(spec.min), max: String(spec.max), unit: spec.unit };

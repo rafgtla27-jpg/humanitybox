@@ -5,11 +5,14 @@ Principe : on choisit les paramètres en regardant UNIQUEMENT les régions d'ent
 mesure, sans plus rien toucher, le score sur les régions de test. Si le test s'effondre alors que
 l'entraînement est bon, le modèle a appris par cœur au lieu de comprendre.
 
-Paramètres calibrés (scénario Eurasie habitée, climat Beyer) :
-  advantage   avantage compétitif de sapiens sur les archaïques (α_sa = 1 − a, α_as = 1 + a).
-              Paramètre phénoménologique : la V0.4 doit le remplacer par un avantage culturel émergent.
-  cold_gain   vitesse d'innovation de l'adaptation au froid (/an)
-  cold_ncrit  population voisine nécessaire pour maintenir ce savoir
+Historique : la calibration v0.3.4 (scénario B, avantage fixe) a montré qu'AUCUN avantage
+constant ne fait tenir l'Europe et l'Arctique (0 % sur les 18 variantes) : problème de structure,
+pas de réglage. Depuis la V0.4, l'avantage émerge de la complexité culturelle (scénario C).
+
+Paramètres calibrés (scénario C, climat Beyer) :
+  adv_max     avantage compétitif pour un écart de complexité culturelle de 1
+  cx_n0       taille de réseau social sous laquelle le répertoire culturel s'érode
+  archaic_C   complexité culturelle des archaïques (Néandertaliens, Dénisoviens)
 
 Usage :
   python -m worldsim.calibration plan            # matrice JSON des variantes (GitHub Actions)
@@ -24,10 +27,11 @@ from pathlib import Path
 
 from .ensemble import load_manifests, score, summarize
 
+SCENARIO = "C"
 GRID = {
-    "advantage": [0.0, 0.05, 0.1],
-    "cold_gain": [1 / 8000, 1 / 20000, 1 / 50000],
-    "cold_ncrit": [500.0, 2000.0],
+    "adv_max": [0.2, 0.4],
+    "cx_n0": [2000.0, 6000.0, 20000.0],
+    "archaic_C": [0.25, 0.4, 0.55],
 }
 # Entraînement : régions aux dates les mieux établies et directement concernées par les paramètres
 TRAIN = ["Levant", "Europe", "Asie du Sud", "Arctique sibérien"]
@@ -49,9 +53,9 @@ def report(root: Path) -> dict:
     rows = []
     for s in sums:
         p = s["params"]
+        values = {k: (round(1 - p.get("alpha_sa", 1.0), 4) if k == "advantage" else p.get(k)) for k in GRID}
         rows.append({
-            "variant": s["variant"], "n_runs": s["n_runs"],
-            "advantage": round(1 - p.get("alpha_sa", 1.0), 4), "cold_gain": p.get("cold_gain"), "cold_ncrit": p.get("cold_ncrit"),
+            "variant": s["variant"], "n_runs": s["n_runs"], "params": values,
             "train": round(score(s, TRAIN), 3), "test": round(score(s, TEST), 3),
             "regions": {r["region"]: {"p_in_range": r["p_in_range"], "median": r["median"], "p_reached": r["p_reached"]} for r in s["regions"]},
         })
@@ -59,14 +63,15 @@ def report(root: Path) -> dict:
     best = rows[0] if rows else None
     result = {"train_regions": TRAIN, "test_regions": TEST, "grid": GRID, "ranking": rows, "chosen": best}
 
-    lines = ["# Calibration — Experiment #001, scénario Eurasie habitée", "",
+    keys = list(GRID)
+    lines = [f"# Calibration — Experiment #001, scénario {SCENARIO}", "",
              f"Entraînement : {', '.join(TRAIN)}. Test (jamais utilisé pour choisir) : {', '.join(TEST)}.", "",
-             "| Variante | avantage | cold_gain | cold_ncrit | score entraînement | score test |",
-             "|---|---|---|---|---|---|"]
+             "| Variante | " + " | ".join(keys) + " | score entraînement | score test |",
+             "|---|" + "---|" * len(keys) + "---|---|"]
     for r in rows:
         mark = " ← choisie" if r is best else ""
-        lines.append(f"| {r['variant']}{mark} | {r['advantage']:g} | 1/{1 / r['cold_gain']:.0f} | {r['cold_ncrit']:.0f} | "
-                     f"{r['train']:.0%} | {r['test']:.0%} |")
+        vals = " | ".join("—" if r["params"][k] is None else f"{r['params'][k]:g}" for k in keys)
+        lines.append(f"| {r['variant']}{mark} | {vals} | {r['train']:.0%} | {r['test']:.0%} |")
     if best:
         lines += ["", f"## Variante choisie : {best['variant']}", "", "| Région | rôle | P(dans la fourchette) | médiane |", "|---|---|---|---|"]
         for name, v in best["regions"].items():
@@ -83,5 +88,7 @@ if __name__ == "__main__":
     cmd = sys.argv[1] if len(sys.argv) > 1 else "plan"
     if cmd == "plan":
         print(json.dumps({"include": variants()}))
+    elif cmd == "scenario":
+        print(SCENARIO)
     elif cmd == "report":
         report(Path(sys.argv[2] if len(sys.argv) > 2 else "outputs"))

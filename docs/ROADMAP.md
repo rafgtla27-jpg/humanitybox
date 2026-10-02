@@ -48,8 +48,8 @@ du projet.
 | V0.0 | Terre réelle (ETOPO) | aucun | pipeline géospatial | carte 2D | ✅ |
 | V0.1 | Terre paléo paramétrique | cohortes | dispersion, niveau marin | GIF + viewer web, frise | ✅ |
 | V0.2 | Terre paléo Beyer 2020 | cohortes + archaïques | dates d'arrivée vs archéologie | **globe 3D** (R1, livré en avance) + calques climat | ✅ résultats lus (voir DECISIONS) |
-| V0.3 | idem | ✅ eau douce + rivières émergentes, ✅ adaptation au froid culturelle, ✅ contingence explicite (bruit démographique, pionniers) ; à faire : calibration, refuges, goulots | ✅ P(arrivée) sur ensembles (20 mondes Beyer lus) ; 🔧 calibration (workflow `calibrate`, entraînement/test séparés) | ✅ rivières, calque culture, distributions dans /labo | 🔧 en cours |
-| V0.4 | −50k → −5k | culture cumulative simple, oubli technologique, avantage compétitif émergent (remplace α) | sortie d'Afrique ~60k sans α fixé à la main | timeline des savoirs par région | ⏳ |
+| V0.3 | idem | ✅ eau douce + rivières émergentes, ✅ adaptation au froid culturelle, ✅ contingence explicite (bruit démographique, pionniers) ; à faire : calibration, refuges, goulots | ✅ P(arrivée) sur ensembles (20 mondes Beyer lus) ; ✅ calibration B faite : échec structurel Europe/Arctique → V0.4 avancée | ✅ rivières, calque culture, distributions dans /labo | 🔧 en cours |
+| V0.4 | −120k → −5k | ✅ complexité culturelle liée au réseau social (Henrich, Powell 2009), ✅ avantage compétitif émergent (scénario C) ; à faire : graphe de savoirs, oubli d'innovations précises | sortie d'Afrique ~60k sans α fixé à la main (calibration C en cours) | ✅ calque « Complexité culturelle » ; à faire : timeline des savoirs | 🔧 commencée |
 | V0.5 | Holocène | plantes/animaux exploitables (traits), domestication | P(agriculture) par foyer (Croissant fertile, Chine, Mésoamérique, Andes, Nouvelle-Guinée, Sahel) | carte des foyers + probabilités | ⏳ |
 | V0.6 | Holocène + sols (SoilGrids comme ancre) | stockage, sédentarisation, villages, maladies (zoonoses) | densités, croissance post-agricole | **carte stratégique** (R2) : villages, réseaux | ⏳ |
 | V0.7 | Terre réelle | réciprocité → échange → monnaie, conflits sous contrainte, transport à coûts | commerce sur axes peu coûteux, villes après surplus | routes, frontières culturelles | ⏳ |
@@ -108,7 +108,7 @@ planètes procédurales plutôt que simulé en continu.
 | Snapshots, rewind/replay | V0.3 | snapshots ✅ |
 | Historique causal / graphe de causalité (« pourquoi ? ») | V0.3 → V0.8 | journal d'événements ✅ |
 | Hiérarchie spatiale Planète/Région/Cellule/Patch, résolution adaptative (cohortes ↔ groupes ↔ agents) | V0.6 → V1.0 | cohortes ✅ |
-| Path dependence (état historique, pas seulement conditions actuelles) | V0.4 | ⏳ |
+| Path dependence (état historique, pas seulement conditions actuelles) | V0.4 | ✅ partiel : répertoires culturels hérités et transportés |
 | Métriques de validation automatiques (T, P, glace, biomasse, population, espérance de vie, énergie/capita…) | continu | dates d'arrivée ✅ |
 | Simulation contrefactuelle par seed et paramètres | V0.3 | ✅ ensembles parallèles |
 
@@ -158,7 +158,7 @@ planètes procédurales plutôt que simulé en continu.
 | Coopération, triche, punition, passager clandestin | V0.6 | — |
 | Mémoire collective locale / carte mentale imparfaite | V0.7 | — |
 | Monde perçu ≠ monde réel (PERCEIVED_WORLD_STATE) | V0.7 | — |
-| Autres humains (Néandertaliens, Dénisoviens) et compétition | V0.2 | ✅ (α fixé à la main) |
+| Autres humains (Néandertaliens, Dénisoviens) et compétition | V0.2 | ✅ α émergent de la complexité culturelle (0.4.0) |
 
 ### Culture et technique
 | Idée | Cible | État |

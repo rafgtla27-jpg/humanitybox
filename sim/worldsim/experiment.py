@@ -21,14 +21,15 @@ class RunResult:
     log: list
     snapshots: dict = field(default_factory=dict)  # year -> (N, A, ice, land_frac)
     climate: dict = field(default_factory=dict)    # year -> (temperature, precipitation, npp)
-    extra: dict = field(default_factory=dict)      # year -> {"rivers": débit m³/s, "cold": culture froid}
+    extra: dict = field(default_factory=dict)      # year -> {"rivers", "cold", "complexity"}
 
 
-ARCHAIC = HumanParams(p_sea=0.0, c_fixed=0.4)  # mobiles mais confinés à une aire imposée ; adaptation au froid fixe (Néandertaliens)
+ARCHAIC = HumanParams(p_sea=0.0, c_fixed=0.4, C_fixed=0.35)  # mobiles mais confinés à une aire imposée ; adaptation au froid fixe (Néandertaliens)
 
 
 def run(seed: int = 1, start: int = -120_000, end: int = -10_000, params: HumanParams | None = None,
         archaics: bool = False, alpha_sa: float = 1.0, alpha_as: float = 1.0,
+        complexity: bool = False, archaic_C: float | None = None,
         snapshot_every: int | None = None, earth=None, grid: Grid | None = None, progress=False, dt: int = 20) -> RunResult:
     grid = grid or Grid(1.0)
     earth = earth or ParametricPaleoEarth(grid)
@@ -43,13 +44,20 @@ def run(seed: int = 1, start: int = -120_000, end: int = -10_000, params: HumanP
     eco.step(sim, start, 0)
     africa = grid.box(-35, 12, -18, 52)
     sim.state["N"] = np.where(africa, 0.5 * sim.state["K"], 0.0).astype(np.float32)
+    if complexity:
+        import dataclasses as _dc
+        params = _dc.replace(params, complexity=True)
     sim.state["populations"] = {"N": params}
     if archaics:
         # Néandertaliens / Dénisoviens / autres : Eurasie hors Sahul, Japon, Amériques
         eurasia = grid.box(-11, 55, -12, 145) & ~grid.box(-90, 90, 129.5, 146) & ~africa
         eurasia &= ~grid.box(-90, 33, -20, 33)  # Afrique du Nord exclue
         sim.state["A"] = np.where(eurasia, 0.6 * sim.state["K"], 0.0).astype(np.float32)
-        sim.state["populations"]["A"] = ARCHAIC
+        arch = ARCHAIC
+        if complexity:
+            import dataclasses as _dc
+            arch = _dc.replace(ARCHAIC, adv_max=params.adv_max, C_fixed=ARCHAIC.C_fixed if archaic_C is None else archaic_C)
+        sim.state["populations"]["A"] = arch
         sim.state["range:A"] = eurasia.astype(np.float32)
         # alpha[(i, j)] = effet de j sur i
         sim.state["alpha"] = {("N", "A"): alpha_sa, ("A", "N"): alpha_as}
@@ -70,6 +78,8 @@ def run(seed: int = 1, start: int = -120_000, end: int = -10_000, params: HumanP
                 layers["rivers"] = s.state["discharge"].copy()
             if "culture:N" in s.state:
                 layers["cold"] = np.where(s.state["N"] > 0, s.state["culture:N"], np.nan).astype(np.float32)
+            if "complexity:N" in s.state:
+                layers["complexity"] = np.where(s.state["N"] > 0, s.state["complexity:N"], np.nan).astype(np.float32)
             extra[year] = layers
         sim.observe(snapshot_every, snap)
 

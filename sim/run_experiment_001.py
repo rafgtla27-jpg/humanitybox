@@ -25,6 +25,7 @@ OUT = Path("outputs")
 SCENARIOS = {
     "A": ("Monde vide", dict(archaics=False)),
     "B": ("Eurasie habitée (α 0.9 / 1.1)", dict(archaics=True, alpha_sa=0.9, alpha_as=1.1)),
+    "C": ("Eurasie habitée, avantage culturel émergent", dict(archaics=True, complexity=True)),
 }
 
 
@@ -60,12 +61,15 @@ def main():
     for item in a.set:
         key, _, value = item.partition("=")
         overrides[key.strip()] = float(value)
+    archaic_C = overrides.pop("archaic_C", None)
+    if archaic_C is not None:
+        kw["archaic_C"] = archaic_C
     adv = overrides.pop("advantage", None)
     if adv is not None:
         # Avantage compétitif de sapiens, symétrique : α_sa = 1 − a, α_as = 1 + a
         kw.update(archaics=True, alpha_sa=1 - adv, alpha_as=1 + adv)
         label = f"Eurasie habitée (a = {adv:g})"
-    params = HumanParams(**overrides)
+    params = HumanParams(**{k: (int(v) if k == "net_radius" else v) for k, v in overrides.items()})
     seeds = [int(s) for s in a.seeds.split(",")]
     for i, seed in enumerate(seeds):
         t = time.time()

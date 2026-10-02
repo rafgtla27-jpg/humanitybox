@@ -104,7 +104,7 @@ def test_calibration_ranks_on_train_only(tmp_path):
             good = good_train if r in TRAIN else good_test
             rows.append({"region": r, "target": [60000, 40000], "model_bp": 50000 if good else 90000, "verdict": ""})
         return {"experiment_id": "e", "scenario": "B", "label": "B", "climate_provider": "c", "engine_version": "x",
-                "seed": seed, "variant": variant, "params": {"alpha_sa": 0.9, "cold_gain": 1e-4, "cold_ncrit": 500},
+                "seed": seed, "variant": variant, "params": {"adv_max": 0.2, "cx_n0": 2000, "archaic_C": 0.4},
                 "regions": rows}
     for v, gt, gs in [("v00", True, False), ("v01", False, True)]:
         for seed in (1, 2):
