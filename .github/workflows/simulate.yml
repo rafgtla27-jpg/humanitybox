@@ -1,0 +1,53 @@
+# Lance des simulations sur les runners GitHub et publie les résultats dans Supabase.
+# Actions → simulate → Run workflow. Secrets requis : SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
+name: simulate
+
+on:
+  workflow_dispatch:
+    inputs:
+      scenario:
+        description: "Scénario (A = monde vide, B = Eurasie habitée)"
+        type: choice
+        options: [A, B]
+        default: B
+      seeds:
+        description: "Seeds séparées par des virgules (le premier exporte les frames)"
+        default: "1,2,3"
+      publish:
+        description: "Publier dans Supabase"
+        type: boolean
+        default: true
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    defaults:
+      run:
+        working-directory: sim
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - uses: actions/cache@v4
+        with:
+          path: sim/data
+          key: etopo10-v1
+      - run: pip install -e ".[dev]"
+      - run: python scripts/fetch_data.py
+      - run: python -m pytest -q
+      - name: Simulation
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          python run_experiment_001.py --scenario ${{ inputs.scenario }} --seeds "${{ inputs.seeds }}" \
+            ${{ inputs.publish && '--publish' || '' }}
+          python run_experiment_001.py --chart
+      - uses: actions/upload-artifact@v4
+        with:
+          name: outputs-${{ inputs.scenario }}-${{ github.run_number }}
+          path: sim/outputs
+          retention-days: 30
