@@ -21,9 +21,10 @@ class RunResult:
     log: list
     snapshots: dict = field(default_factory=dict)  # year -> (N, A, ice, land_frac)
     climate: dict = field(default_factory=dict)    # year -> (temperature, precipitation, npp)
+    extra: dict = field(default_factory=dict)      # year -> {"rivers": débit m³/s, "cold": culture froid}
 
 
-ARCHAIC = HumanParams(p_sea=0.0)  # mobiles, mais confinés à une aire imposée par les données
+ARCHAIC = HumanParams(p_sea=0.0, c_fixed=0.4)  # mobiles mais confinés à une aire imposée ; adaptation au froid fixe (Néandertaliens)
 
 
 def run(seed: int = 1, start: int = -120_000, end: int = -10_000, params: HumanParams | None = None,
@@ -57,13 +58,20 @@ def run(seed: int = 1, start: int = -120_000, end: int = -10_000, params: HumanP
     sim.observe(500, tracker)
     snaps: dict = {}
     clim: dict = {}
+    extra: dict = {}
     if snapshot_every:
         def snap(s: Simulation, year: int):
             e = s.state["earth"]
             A = s.state.get("A")
             snaps[year] = (s.state["N"].copy(), None if A is None else A.copy(), e.ice.copy(), e.land_frac.copy())
             clim[year] = (e.temperature.astype(np.float32), e.precipitation.astype(np.float32), e.npp.astype(np.float32))
+            layers = {}
+            if "discharge" in s.state:
+                layers["rivers"] = s.state["discharge"].copy()
+            if "culture:N" in s.state:
+                layers["cold"] = np.where(s.state["N"] > 0, s.state["culture:N"], np.nan).astype(np.float32)
+            extra[year] = layers
         sim.observe(snapshot_every, snap)
 
     sim.run(progress=progress)
-    return RunResult(seed, tracker, sim.log.events, snaps, clim)
+    return RunResult(seed, tracker, sim.log.events, snaps, clim, extra)

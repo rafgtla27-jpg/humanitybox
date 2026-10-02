@@ -86,3 +86,28 @@ un avantage émergent (V0.4).
 qui s'efface après 3 s d'inactivité, lecture automatique) ; l'ancienne page détaillée passe sur
 `/labo`. Le globe gère l'absence de WebGL (message clair, repli sur la carte dans `/labo`) au
 lieu de faire planter toute la page. Les runs de démo sont désormais les vrais runs Beyer.
+
+**v0.3.0 — eau douce, rivières émergentes, adaptation culturelle au froid**
+
+1. *Rivières* (`hydrology.py`) : réseau de drainage calculé une fois sur le relief réel
+   (priority-flood, Barnes et al. 2014), ruissellement par Budyko-Fu (ω = 2,6), débit par
+   accumulation. Aucune rivière n'est dessinée à la main : le Nil sort du lac Victoria et
+   remonte jusqu'en Égypte, l'Amazone dépasse 10 000 m³/s (tests). Limites : bassins
+   endoréiques comblés, pas de lacs ni de nappes, ETP linéaire en température.
+2. *Eau disponible* = max(pluie suffisante, accès à un fleuve). Seuils d'aridité UNEP
+   (P/ETP : 0 sous 0,05, plein au-dessus de 0,2) ; fleuve plein au-dessus de 500 m³/s, nul
+   sous 20 m³/s ; sur la côte, plancher de 0,25 (sources, estuaires). Hypothèses, pas réglages.
+3. *Adaptation au froid* : premier trait culturel, porté par les cohortes et transporté par
+   la migration (moyenne pondérée, masse conservée, testé). Il progresse sous contrainte de
+   froid si le voisinage 3×3 compte au moins 2 000 personnes, et se perd quand le réseau est trop
+   petit (effet « Tasmanie », Henrich 2004). À adaptation complète, la limite de froid passe de
+   −12 °C à −34 °C de moyenne annuelle. Archaïques : adaptation fixe à 0,4 (hypothèse).
+   **Paramètres non calibrés.** Plan : calibrer gain/perte sur Europe + Sibérie (Yana ~32k),
+   valider sur les Amériques, jamais l'inverse.
+4. Aperçu en climat provisoire (scénario A) : la Sibérie arctique est atteinte vers 97k et les
+   Amériques vers 73k, beaucoup trop tôt ; avec ces valeurs, la culture du froid n'est pas le
+   facteur limitant. Le vrai test est le run Beyer v0.3.
+5. Coût : ~50 s par run (contre ~30 s), surtout la migration du trait culturel.
+
+Viewer : rivières dessinées sur tous les calques (seuil d'affichage ~500 m³/s), calque
+« Adaptation au froid », run d'aperçu « A — aperçu moteur 0.3 » en démo.

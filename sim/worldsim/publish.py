@@ -80,6 +80,8 @@ def publish_run(export_dir: Path, manifest: dict) -> str:
     upload(f"{prefix}/manifest.json", json.dumps(manifest, ensure_ascii=False).encode(), "application/json")
     if manifest["frames"]["years"]:
         upload(f"{prefix}/frames.bin.gz", (export_dir / "frames.bin.gz").read_bytes(), "application/octet-stream")
+    if manifest.get("extra"):
+        upload(f"{prefix}/layers.bin.gz", (export_dir / "layers.bin.gz").read_bytes(), "application/octet-stream")
     if manifest.get("climate"):
         upload(f"{prefix}/climate.bin.gz", (export_dir / "climate.bin.gz").read_bytes(), "application/octet-stream")
 

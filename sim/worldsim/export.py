@@ -6,6 +6,9 @@ WORLD_SIM — export d'un run vers un format lisible par le viewer web.
                       base     bit0 = terre émergée, bit1 = glace
                       sapiens  densité log-quantifiée (0 = personne)
                       archaic  idem (zéros si absent)
+    layers.bin.gz   pour chaque frame, une couche uint8 par calque listé dans manifest.extra :
+                      rivers  débit log10 entre Q_RANGE (0 = pas de cours d'eau notable)
+                      cold    adaptation culturelle au froid 0..1 (0 = inhabité)
     climate.bin.gz  pour chaque frame, 3 couches uint8 (0 = pas de donnée / mer) :
                       temperature    linéaire entre T_RANGE
                       precipitation  log10 entre P_RANGE
@@ -24,11 +27,25 @@ import numpy as np
 
 from .earth import Grid, monsoon_index, sea_level
 
-ENGINE_VERSION = "0.2.2"
+ENGINE_VERSION = "0.3.0"
 LO, HI = 1e-3, 0.5  # hab/km²
 T_RANGE = (-40.0, 35.0)    # °C
 P_RANGE = (10.0, 4000.0)   # mm/an
 NPP_MAX = 3000.0           # g matière sèche / m² / an
+Q_RANGE = (10.0, 1e5)      # m³/s
+EXTRA_SPECS = {
+    "rivers": {"label": "Rivières", "min": Q_RANGE[0], "max": Q_RANGE[1], "scale": "log10", "unit": "m³/s"},
+    "cold": {"label": "Adaptation au froid", "min": 0, "max": 1, "scale": "linear", "unit": ""},
+}
+
+
+def encode_extra(name: str, a: np.ndarray, land: np.ndarray) -> np.ndarray:
+    if name == "rivers":
+        t = (np.log10(np.maximum(a, 1e-9)) - np.log10(Q_RANGE[0])) / (np.log10(Q_RANGE[1]) - np.log10(Q_RANGE[0]))
+        return _q(t, land & (a >= Q_RANGE[0]))
+    if name == "cold":
+        return _q(a, land & np.isfinite(a))
+    raise KeyError(name)
 
 
 def quantize(density: np.ndarray) -> np.ndarray:
@@ -82,6 +99,18 @@ def export_run(result, grid: Grid, out_dir: Path, meta: dict) -> dict:
         cblob = np.concatenate([c.ravel() for c in cl])
         (out_dir / "climate.bin.gz").write_bytes(gzip.compress(cblob.tobytes(), compresslevel=9))
 
+    extra_names = []
+    ex = getattr(result, "extra", None) or {}
+    if ex and all(y in ex for y in years):
+        extra_names = [k for k in EXTRA_SPECS if all(k in ex[y] for y in years)]
+    if extra_names:
+        el = []
+        for y in years:
+            land = result.snapshots[y][3] > 0.3
+            el += [encode_extra(k, ex[y][k], land) for k in extra_names]
+        eblob = np.concatenate([c.ravel() for c in el])
+        (out_dir / "layers.bin.gz").write_bytes(gzip.compress(eblob.tobytes(), compresslevel=9))
+
     t = result.tracker
     curve_years = list(range(meta["start_year"], meta["end_year"] + 1, 500))
     manifest = {
@@ -96,6 +125,8 @@ def export_run(result, grid: Grid, out_dir: Path, meta: dict) -> dict:
             "temperature": {"min": T_RANGE[0], "max": T_RANGE[1], "scale": "linear", "unit": "°C"},
             "precipitation": {"min": P_RANGE[0], "max": P_RANGE[1], "scale": "log10", "unit": "mm/an"},
             "npp": {"min": 0, "max": NPP_MAX, "scale": "sqrt", "unit": "g/m²/an"}},
+        "extra": None if not extra_names else {
+            "file": "layers.bin.gz", "layers": [{"id": k, **EXTRA_SPECS[k]} for k in extra_names]},
         "regions": [{**row, "target": list(row["target"]), "box": None} for row in t.report()],
         "events": [{"year": e.year, "kind": e.kind, "region": e.where, "data": {k: str(v) for k, v in e.data.items()}}
                    for e in result.log],

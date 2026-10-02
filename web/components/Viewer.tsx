@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { bp, listRuns, loadRun, source, type RunRef } from "@/lib/data";
-import { LAYERS, RAMPS, legendFor, paintFrame, type Layer, type RunData } from "@/lib/paint";
+import { RAMPS, availableLayers, legendFor, paintFrame, type Layer, type RunData } from "@/lib/paint";
 
 const Globe = dynamic(() => import("./Globe"), {
   ssr: false,
@@ -197,7 +197,7 @@ function MapCanvas({ data, frame, layer }: { data: Loaded; frame: number; layer:
 function Controls({ data, view, setView, layer, setLayer }: {
   data: Loaded; view: View; setView: (v: View) => void; layer: Layer; setLayer: (l: Layer) => void;
 }) {
-  const available = LAYERS.filter((l) => l.id === "humans" || data.climate);
+  const available = availableLayers(data);
   return (
     <div className="controls">
       <div className="seg" role="group" aria-label="Vue">

@@ -34,6 +34,15 @@ class HumanParams:
     allee_n: float = 25.0       # sous ce seuil, risque d'extinction démographique
     p_ext: float = 0.004        # probabilité d'extinction /an sous le seuil
     k_noise: float = 0.15       # variabilité locale (écart-type log) à chaque mise à jour climatique
+    # --- V0.3 : eau douce (voir hydrology.py)
+    water: bool = True          # la capacité de charge terrestre dépend de l'eau disponible
+    marine_water_floor: float = 0.25  # sur la côte, sources et estuaires gardent un minimum d'eau
+    # --- V0.3 : adaptation culturelle au froid (vêtements, feu, abris), portée par les cohortes
+    c_fixed: float | None = None  # None = trait dynamique ; sinon valeur imposée (ex. archaïques)
+    cold_delta: float = 22.0    # °C gagnés sur t_min quand l'adaptation est complète (c = 1)
+    cold_gain: float = 1 / 8000  # /an : vitesse d'innovation sous contrainte de froid
+    cold_loss: float = 1 / 4000  # /an : perte quand le réseau humain est trop petit (effet Tasmanie)
+    cold_ncrit: float = 2000.0  # personnes dans le voisinage 3×3 nécessaires pour maintenir le savoir
 
 
 ADJ = [(-1, 0, 1.0), (1, 0, 1.0), (0, -1, 1.0), (0, 1, 1.0),
@@ -55,31 +64,51 @@ def shift(a: np.ndarray, di: int, dj: int) -> np.ndarray:
 
 
 class Ecology:
-    """Met à jour EarthState et la capacité de charge K (période lente)."""
+    """Met à jour EarthState, l'hydrologie et la capacité de charge de base (période lente).
+
+    K_base n'inclut pas le froid : la tolérance au froid dépend de la culture de chaque
+    population et est appliquée dans Demography.
+    """
 
     name = "ecology"
 
     def __init__(self, earth: EarthProvider, grid: Grid, params: HumanParams, period: int = 250):
         self.earth, self.grid, self.p, self.period = earth, grid, params, period
+        self.hydro = None
+        if params.water:
+            from .earth import Topography
+            from .hydrology import Hydrology
+            self.hydro = Hydrology(grid, getattr(earth, "topo", None) or Topography(grid))
 
-    def carrying_capacity(self, s) -> np.ndarray:
+    def carrying_capacity(self, s, water: np.ndarray | None = None) -> np.ndarray:
         p, g = self.p, self.grid
         land_area = g.cell_area_km2 * s.land_frac
-        cold = np.clip((s.temperature - p.t_min) / (p.t_ok - p.t_min), 0, 1)
-        dens = p.d_max * np.minimum(s.npp / p.npp_ref, 1.3) * cold
+        w = np.ones_like(s.npp) if water is None else water
+        dens = p.d_max * np.minimum(s.npp / p.npp_ref, 1.3) * w
         coastal = (s.land_frac > 0.02) & (s.land_frac < 0.98)
-        marine = np.where(coastal, p.marine * g.cell_area_km2 * 0.3 * cold, 0)
+        marine = np.where(coastal, p.marine * g.cell_area_km2 * 0.3 * np.maximum(w, p.marine_water_floor), 0)
         k = dens * land_area + marine
         return np.where(s.ice | (s.land_frac <= 0.02), 0.0, k)
 
     def step(self, sim: Simulation, year: int, dt: int) -> None:
         s = self.earth.state(year)
-        k = self.carrying_capacity(s)
+        water = None
+        if self.hydro is not None:
+            q = self.hydro.discharge_m3s(s.precipitation, s.temperature, s.land_frac > 0.3)
+            water = self.hydro.water_availability(s.precipitation, s.temperature, q)
+            sim.state["discharge"] = q.astype(np.float32)
+            sim.state["water"] = water.astype(np.float32)
+        k = self.carrying_capacity(s, water)
         noise = sim.rng.get("ecology").lognormal(0, self.p.k_noise, k.shape)
         sim.state["earth"] = s
         sim.state["K"] = (k * noise).astype(np.float32)
         sim.state["passable"] = (s.land_frac > 0.02) & ~s.ice
         sim.state["rough_cost"] = np.exp(-s.roughness / self.p.rough_scale).astype(np.float32)
+
+
+def cold_factor(temperature: np.ndarray, p: HumanParams, c) -> np.ndarray:
+    t_min = p.t_min - p.cold_delta * c
+    return np.clip((temperature - t_min) / (p.t_ok - t_min), 0, 1)
 
 
 class Demography:
@@ -121,32 +150,46 @@ class Demography:
             self._static_key = key
         return self._coef
 
-    def migrate(self, N: np.ndarray, room: np.ndarray, out_rate: np.ndarray, coefs) -> np.ndarray:
+    def migrate(self, N: np.ndarray, room: np.ndarray, out_rate: np.ndarray, coefs, carried=()):
+        """Déplace N et, avec exactement les mêmes flux relatifs, les quantités `carried`
+        (ex. N × trait culturel). Renvoie N seul si carried est vide, sinon (N, [carried…])."""
         shape = N.shape
         room_pad = self._pad(room)
         weights = [self._view(room_pad, di, dj, shape) * c for di, dj, c in coefs]
         W = weights[0].copy()
         for w in weights[1:]:
             W += w
-        out = np.where(W > 0, N * out_rate, 0)
-        share = out / np.where(W > 0, W, 1)
+        rate = np.where(W > 0, out_rate, 0)
+        Wsafe = np.where(W > 0, W, 1)
         P = self.PAD
-        acc = np.zeros((shape[0] + 2 * P, shape[1] + 2 * P), dtype=N.dtype)
-        for (di, dj, _), w in zip(coefs, weights):
-            acc[P + di:P + di + shape[0], P + dj:P + dj + shape[1]] += share * w
-        acc[:, P:2 * P] += acc[:, -P:]       # repli périodique en longitude
-        acc[:, -2 * P:-P] += acc[:, :P]
-        return N - out + acc[P:-P, P:-P]
+
+        def move(X):
+            out = X * rate
+            share = out / Wsafe
+            acc = np.zeros((shape[0] + 2 * P, shape[1] + 2 * P), dtype=np.float32)
+            for (di, dj, _), w in zip(coefs, weights):
+                acc[P + di:P + di + shape[0], P + dj:P + dj + shape[1]] += share * w
+            acc[:, P:2 * P] += acc[:, -P:]       # repli périodique en longitude
+            acc[:, -2 * P:-P] += acc[:, :P]
+            return X - out + acc[P:-P, P:-P]
+
+        if not carried:
+            return move(N)
+        return move(N), [move(X) for X in carried]
+
+    def _neighborhood(self, N: np.ndarray) -> np.ndarray:
+        padded = self._pad(N)
+        return sum(self._view(padded, di, dj, N.shape) for di in (-1, 0, 1) for dj in (-1, 0, 1))
 
     def step(self, sim: Simulation, year: int, dt: int) -> None:
-        """Toutes les populations partagent la même capacité de charge K.
+        """Toutes les populations partagent la même capacité de charge de base.
 
         Compétition de type Lotka-Volterra : pour la population i,
-        charge_i = N_i + somme_j alpha[i, j] * N_j.
+        charge_i = N_i + somme_j alpha[i, j] * N_j, comparée à K_i = K_base × froid_i(culture_i).
         alpha[i, j] < 1 : i est peu gênée par j ; > 1 : i est fortement gênée par j.
         """
-        K = sim.state["K"]
-        Ksafe = np.maximum(K, 1e-9)
+        K_base = sim.state["K"]
+        T = sim.state["earth"].temperature
         coefs = self._static(sim)
         pops = sim.state["populations"]           # {nom: params}
         alpha = sim.state.get("alpha", {})
@@ -154,6 +197,13 @@ class Demography:
 
         for name, p in pops.items():
             N = current[name]
+            dynamic = p.c_fixed is None
+            c = sim.state.get(f"culture:{name}") if dynamic else None
+            if dynamic and c is None:
+                c = np.zeros_like(N, dtype=np.float32)
+            c_eff = c if dynamic else p.c_fixed
+            K = (K_base * cold_factor(T, p, c_eff)).astype(np.float32)
+            Ksafe = np.maximum(K, 1e-9)
             load = N.copy()
             for other, M in current.items():
                 if other != name:
@@ -161,8 +211,8 @@ class Demography:
             rng = sim.rng.get(f"demography:{name}")
 
             # 1. Croissance / déclin (forme de Ricker : stable pour r·dt petit)
-            expo = np.clip(p.r * dt * (1 - load / Ksafe), -3, 1)
-            N = np.where(K > 0, N * np.exp(expo), N * 0.5)
+            expo = np.clip(p.r * dt * (1 - load / Ksafe), -3, 1).astype(np.float32)
+            N = np.where(K > 0, N * np.exp(expo), N * np.float32(0.5))
 
             # 2. Migration : on part si c'est plein, on va là où il y a de la place
             if p.m_base > 0 or p.m_press > 0:
@@ -174,10 +224,26 @@ class Demography:
                 pressure = np.where(K > 0, np.clip(load / Ksafe, 0, 3), 3)
                 out_rate = np.clip((p.m_base + p.m_press * pressure) * dt, 0, 0.5).astype(np.float32)
                 hop_coefs = coefs if p.p_sea > 0 else coefs[:len(ADJ)]
-                N = self.migrate(N, room, out_rate, hop_coefs)
+                if dynamic:
+                    N, (Nc,) = self.migrate(N, room, out_rate, hop_coefs, carried=(N * c,))
+                    c = np.where(N > 1e-9, np.clip(Nc / np.maximum(N, 1e-9), 0, 1), 0)
+                else:
+                    N = self.migrate(N, room, out_rate, hop_coefs)
 
             # 3. Stochasticité démographique : les petits groupes peuvent disparaître
             small = (N > 0) & (N < p.allee_n)
             dies = small & (rng.random(N.shape, dtype=np.float32) < 1 - (1 - p.p_ext) ** dt)
             N = np.where(dies | (N < 1), 0, N)
+
+            # 4. Culture : on innove sous la contrainte du froid si le réseau humain est assez grand,
+            #    on oublie si le groupe est trop isolé (aucune technique n'est acquise pour toujours)
+            if dynamic:
+                n_eff = self._neighborhood(N)
+                stressed = T < p.t_ok + 5
+                big = n_eff >= p.cold_ncrit
+                gain = np.where(big & stressed, p.cold_gain * dt * (1 - c), 0)
+                loss = np.where(~big, p.cold_loss * dt * c, 0)
+                c = np.where(N > 0, np.clip(c + gain - loss, 0, 1), 0)
+                sim.state[f"culture:{name}"] = c.astype(np.float32)
+
             sim.state[name] = N.astype(np.float32)

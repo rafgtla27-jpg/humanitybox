@@ -4,7 +4,7 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { listRuns, loadRun, type RunRef } from "@/lib/data";
-import { LAYERS, RAMPS, legendFor, type Layer, type RunData } from "@/lib/paint";
+import { RAMPS, availableLayers, legendFor, type Layer, type RunData } from "@/lib/paint";
 
 const Globe = dynamic(() => import("./Globe"), { ssr: false, loading: () => <div className="sim-loading" aria-hidden /> });
 
@@ -124,7 +124,7 @@ export default function Simulator() {
 
           {menu === "layers" && (
             <div className="popover" role="menu">
-              {LAYERS.filter((l) => l.id === "humans" || data?.climate).map((l) => (
+              {(data ? availableLayers(data) : []).map((l) => (
                 <button key={l.id} role="menuitemradio" aria-checked={layer === l.id} onClick={() => { setLayer(l.id); setMenu(null); }}>
                   {l.label}
                 </button>

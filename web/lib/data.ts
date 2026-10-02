@@ -27,6 +27,7 @@ export type Manifest = {
     precipitation: ClimateSpec;
     npp: ClimateSpec;
   } | null;
+  extra?: { file: string; layers: ({ id: string; label: string } & ClimateSpec)[] } | null;
   regions: RegionRow[];
   events: { year: number; kind: string; region: string; data: Record<string, string> }[];
   series: { years: number[]; total: number[]; by_region: Record<string, number[]> };
@@ -85,17 +86,27 @@ async function fetchBinary(url: string): Promise<Uint8Array> {
   return bytes;
 }
 
-export async function loadRun(ref: RunRef): Promise<{ manifest: Manifest; frames: Uint8Array; climate: Uint8Array | null }> {
+export async function loadRun(
+  ref: RunRef,
+): Promise<{ manifest: Manifest; frames: Uint8Array; climate: Uint8Array | null; extra: Uint8Array | null }> {
   const res = await fetch(ref.manifestUrl);
   if (!res.ok) throw new Error(`Manifest introuvable (${res.status}).`);
   const manifest: Manifest = await res.json();
   const expected = manifest.frames.years.length * 3 * manifest.grid.ny * manifest.grid.nx;
-  const [frames, climate] = await Promise.all([
+  const optional = (file?: string) => (file ? fetchBinary(`${ref.baseUrl}/${file}`).catch(() => null) : Promise.resolve(null));
+  const [frames, climate, extra] = await Promise.all([
     fetchBinary(`${ref.baseUrl}/${manifest.frames.file}`),
-    manifest.climate ? fetchBinary(`${ref.baseUrl}/${manifest.climate.file}`).catch(() => null) : Promise.resolve(null),
+    optional(manifest.climate?.file),
+    optional(manifest.extra?.file),
   ]);
   if (frames.length !== expected) throw new Error(`Frames corrompues : ${frames.length} octets au lieu de ${expected}.`);
-  return { manifest, frames, climate: climate && climate.length === expected ? climate : null };
+  const extraExpected = (expected / 3) * (manifest.extra?.layers.length ?? 0);
+  return {
+    manifest,
+    frames,
+    climate: climate && climate.length === expected ? climate : null,
+    extra: extra && extra.length === extraExpected ? extra : null,
+  };
 }
 
 export const bp = (year: number) => `${Math.round(-year / 1000)} 000`.replace(/^0 000$/, "0");
