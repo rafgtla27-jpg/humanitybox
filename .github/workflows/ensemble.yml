@@ -6,10 +6,10 @@ on:
   workflow_dispatch:
     inputs:
       scenario:
-        description: "Scénario (A = monde vide, B = Eurasie habitée)"
+        description: "Scénario (A = monde vide, B = Eurasie habitée, C = avantage culturel émergent)"
         type: choice
-        options: [A, B]
-        default: B
+        options: [A, B, C]
+        default: C
       climate:
         description: "Climat"
         type: choice

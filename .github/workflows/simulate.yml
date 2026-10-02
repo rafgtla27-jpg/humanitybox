@@ -8,7 +8,7 @@ on:
       scenario:
         description: "Scénario (A = monde vide, B = Eurasie habitée)"
         type: choice
-        options: [A, B]
+        options: [A, B, C]
         default: B
       climate:
         description: "Climat (beyer = reconstruction Beyer et al. 2020, parametric = provisoire)"

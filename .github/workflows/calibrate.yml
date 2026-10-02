@@ -20,6 +20,7 @@ jobs:
     outputs:
       matrix: ${{ steps.plan.outputs.matrix }}
       seeds: ${{ steps.plan.outputs.seeds }}
+      scenario: ${{ steps.plan.outputs.scenario }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -30,6 +31,7 @@ jobs:
         working-directory: sim
         run: |
           echo "matrix=$(python -m worldsim.calibration plan)" >> "$GITHUB_OUTPUT"
+          echo "scenario=$(python -m worldsim.calibration scenario)" >> "$GITHUB_OUTPUT"
           echo "seeds=$(python -c "print(','.join(str(i) for i in range(1, int('${{ inputs.seeds }}') + 1)))")" >> "$GITHUB_OUTPUT"
 
   run:
@@ -63,7 +65,7 @@ jobs:
       - run: python scripts/fetch_data.py ${{ inputs.climate == 'beyer' && '--beyer' || '' }}
       - name: Variante ${{ matrix.variant }}
         run: |
-          python run_experiment_001.py --scenario B --climate ${{ inputs.climate }} --no-frames \
+          python run_experiment_001.py --scenario ${{ needs.plan.outputs.scenario }} --climate ${{ inputs.climate }} --no-frames \
             --seeds "${{ needs.plan.outputs.seeds }}" --variant ${{ matrix.variant }} ${{ matrix.sets }}
       - uses: actions/upload-artifact@v4
         with:
