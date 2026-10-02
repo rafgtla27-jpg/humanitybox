@@ -1,21 +1,21 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { bp, listRuns, loadRun, source, type Manifest, type RunRef } from "@/lib/data";
+import { bp, listRuns, loadRun, source, type RunRef } from "@/lib/data";
+import { LAYERS, RAMPS, legendFor, paintFrame, type Layer, type RunData } from "@/lib/paint";
 
-const COLORS = {
-  ocean: [18, 51, 74],
-  land: [124, 114, 98],
-  ice: [233, 241, 243],
-  sapiens: [227, 161, 59],
-  archaic: [183, 207, 162],
-};
+const Globe = dynamic(() => import("./Globe"), {
+  ssr: false,
+  loading: () => <div className="globe globe-loading">Préparation du globe…</div>,
+});
 // Bande de latitudes affichée (les pôles n'apportent rien ici)
 const LAT_TOP = 80;
 const LAT_BOTTOM = -60;
 const LABEL_W = 190;
 
-type Loaded = { manifest: Manifest; frames: Uint8Array };
+type Loaded = RunData;
+type View = "globe" | "map";
 
 function useWidth<T extends HTMLElement>() {
   const ref = useRef<T>(null);
@@ -36,6 +36,8 @@ export default function Viewer() {
   const [error, setError] = useState<string | null>(null);
   const [frame, setFrame] = useState(0);
   const [playing, setPlaying] = useState(false);
+  const [view, setView] = useState<View>("globe");
+  const [layer, setLayer] = useState<Layer>("humans");
 
   useEffect(() => {
     listRuns()
@@ -103,8 +105,10 @@ export default function Viewer() {
         <span className="wordmark">WORLD_SIM</span>
         <h1>Des humains sans technologie se dispersent-ils de façon crédible sur une Terre qui change&nbsp;?</h1>
         <p className="lede">
-          Experiment #001, de 120&nbsp;000 à 10&nbsp;000 ans avant le présent. Relief réel, niveau marin reconstruit,
-          climat encore provisoire.
+          Experiment #001, de 120&nbsp;000 à 10&nbsp;000 ans avant le présent. Relief réel, niveau marin reconstruit,{" "}
+          {data?.manifest.climate_provider.startsWith("beyer")
+            ? "climat reconstruit (Beyer et al. 2020)."
+            : "climat encore provisoire."}
         </p>
         <nav className="runs" aria-label="Choisir un run">
           {runs === null && <span className="muted">Chargement des runs…</span>}
@@ -122,7 +126,8 @@ export default function Viewer() {
 
       {data ? (
         <>
-          <MapCanvas data={data} frame={frame} />
+          <Controls data={data} view={view} setView={setView} layer={layer} setLayer={setLayer} />
+          {view === "globe" ? <Globe data={data} frame={frame} layer={layer} /> : <MapCanvas data={data} frame={frame} layer={layer} />}
           <Readout
             data={data}
             frame={frame}
@@ -150,59 +155,21 @@ export default function Viewer() {
   );
 }
 
-function MapCanvas({ data, frame }: { data: Loaded; frame: number }) {
+function MapCanvas({ data, frame, layer }: { data: Loaded; frame: number; layer: Layer }) {
   const ref = useRef<HTMLCanvasElement>(null);
-  const { ny, nx } = data.manifest.grid;
+  const { nx } = data.manifest.grid;
   const row0 = Math.round(90 - LAT_TOP);
   const rows = Math.round(LAT_TOP - LAT_BOTTOM);
-
-  const { density_lo: lo, density_hi: hi } = data.manifest.frames;
-  const span = Math.log10(hi) - Math.log10(lo);
-  const deq = (q: number) => (q ? 10 ** (Math.log10(lo) + ((q - 1) / 254) * span) : 0);
-  const quant = (d: number) => Math.min(255, 1 + Math.max(0, Math.round((254 * (Math.log10(d) - Math.log10(lo))) / span)));
 
   useEffect(() => {
     const canvas = ref.current;
     if (!canvas) return;
-    const plane = ny * nx;
-    const off = frame * 3 * plane;
-    const base = data.frames.subarray(off, off + plane);
-    const sap = data.frames.subarray(off + plane, off + 2 * plane);
-    const arc = data.frames.subarray(off + 2 * plane, off + 3 * plane);
-
     const small = document.createElement("canvas");
     small.width = nx;
     small.height = rows;
     const sctx = small.getContext("2d")!;
     const img = sctx.createImageData(nx, rows);
-    for (let r = 0; r < rows; r++) {
-      for (let c = 0; c < nx; c++) {
-        const i = (r + row0) * nx + c;
-        const b = base[i];
-        const col = b & 2 ? COLORS.ice : b & 1 ? COLORS.land : COLORS.ocean;
-        let [R, G, B] = col;
-        const ds = deq(sap[i]);
-        const da = deq(arc[i]);
-        const tot = ds + da;
-        if (tot > 0) {
-          // Teinte = qui domine localement ; opacité = densité totale
-          const share = ds / tot;
-          const qTot = quant(tot);
-          const a = 0.25 + 0.7 * (qTot / 255);
-          const tr = COLORS.archaic[0] + share * (COLORS.sapiens[0] - COLORS.archaic[0]);
-          const tg = COLORS.archaic[1] + share * (COLORS.sapiens[1] - COLORS.archaic[1]);
-          const tb = COLORS.archaic[2] + share * (COLORS.sapiens[2] - COLORS.archaic[2]);
-          R = R * (1 - a) + tr * a;
-          G = G * (1 - a) + tg * a;
-          B = B * (1 - a) + tb * a;
-        }
-        const o = (r * nx + c) * 4;
-        img.data[o] = R;
-        img.data[o + 1] = G;
-        img.data[o + 2] = B;
-        img.data[o + 3] = 255;
-      }
-    }
+    paintFrame(data, frame, layer, img.data, row0, rows);
     sctx.putImageData(img, 0, 0);
 
     const dpr = window.devicePixelRatio || 1;
@@ -213,7 +180,7 @@ function MapCanvas({ data, frame }: { data: Loaded; frame: number }) {
     const ctx = canvas.getContext("2d")!;
     ctx.imageSmoothingEnabled = false;
     ctx.drawImage(small, 0, 0, canvas.width, canvas.height);
-  }, [data, frame, nx, ny, row0, rows]);
+  }, [data, frame, layer, nx, row0, rows]);
 
   return (
     <figure className="map">
@@ -221,9 +188,49 @@ function MapCanvas({ data, frame }: { data: Loaded; frame: number }) {
         ref={ref}
         style={{ aspectRatio: `${nx} / ${rows}` }}
         role="img"
-        aria-label={`Carte des populations en ${bp(data.manifest.frames.years[frame])} avant le présent`}
+        aria-label={`Carte en ${bp(data.manifest.frames.years[frame])} avant le présent`}
       />
     </figure>
+  );
+}
+
+function Controls({ data, view, setView, layer, setLayer }: {
+  data: Loaded; view: View; setView: (v: View) => void; layer: Layer; setLayer: (l: Layer) => void;
+}) {
+  const available = LAYERS.filter((l) => l.id === "humans" || data.climate);
+  return (
+    <div className="controls">
+      <div className="seg" role="group" aria-label="Vue">
+        <button aria-pressed={view === "globe"} onClick={() => setView("globe")}>Globe</button>
+        <button aria-pressed={view === "map"} onClick={() => setView("map")}>Carte</button>
+      </div>
+      <div className="seg" role="group" aria-label="Calque affiché">
+        {available.map((l) => (
+          <button key={l.id} aria-pressed={layer === l.id} onClick={() => setLayer(l.id)}>{l.label}</button>
+        ))}
+      </div>
+      <Legend data={data} layer={layer} />
+    </div>
+  );
+}
+
+function Legend({ data, layer }: { data: Loaded; layer: Layer }) {
+  if (layer === "humans") {
+    return (
+      <p className="layer-legend">
+        <span className="dot dot-sapiens" /> Sapiens <span className="dot dot-archaic" /> Autres humains
+        <span className="dot dot-ice" /> Glace
+      </p>
+    );
+  }
+  const { min, max, unit } = legendFor(data.manifest, layer);
+  const stops = RAMPS[layer].map(([p, c]) => `${c} ${p * 100}%`).join(", ");
+  return (
+    <p className="layer-legend">
+      <span>{min}</span>
+      <span className="ramp" style={{ background: `linear-gradient(90deg, ${stops})` }} />
+      <span>{max} {unit}</span>
+    </p>
   );
 }
 

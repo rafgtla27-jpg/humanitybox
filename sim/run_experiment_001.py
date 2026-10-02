@@ -63,11 +63,17 @@ def main():
         if a.gif and i == 0:
             from worldsim.render import make_gif
             make_gif(grid, r.snapshots, str(OUT / f"experiment_001_{a.scenario}_{a.climate}.gif"), f"WORLD_SIM #001 · {label} · {earth.name}")
-        if a.publish:
-            from worldsim.publish import publish_run
-            print("  publié :", publish_run(out, manifest))
         for row in manifest["regions"]:
             print(f"    {row['region'][:34]:<36} {str(row['model_bp']):>8}  {row['verdict']}")
+        if a.publish:
+            from worldsim.publish import SupabaseError, configured, publish_run
+            if not configured():
+                print("  publication ignorée : secrets SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY absents")
+            else:
+                try:
+                    print("  publié :", publish_run(out, manifest))
+                except SupabaseError as e:
+                    print("  ÉCHEC de publication (résultats conservés dans outputs/) :", e)
 
 
 def chart():

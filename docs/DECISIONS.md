@@ -46,3 +46,9 @@ Le fichier ne couvre que −60°..90° (Antarctique absent). Le lecteur place d�
 sur une grille globale par coordonnées ; le test reproduit le format réel relevé par
 `inspect_netcdf.py` (72 tranches, pas de 2 000 ans avant −22k puis 1 000 ans).
 Leçon : l'étape d'inspection en CI a permis de diagnostiquer en une passe.
+
+**v0.2.2** — Runs Beyer A et B : la simulation passe (seed 1 en 9 s et 24 s sur les runners
+GitHub), l'échec venait de la publication Supabase sans secrets. La publication est désormais
+ignorée si les secrets manquent, et un échec de publication n'interrompt plus le run ; les
+résultats s'affichent avant. Export de 3 calques climatiques (`climate.bin.gz`) et globe 3D
+dans le viewer.

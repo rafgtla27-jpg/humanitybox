@@ -47,8 +47,8 @@ du projet.
 |---|---|---|---|---|---|
 | V0.0 | Terre réelle (ETOPO) | aucun | pipeline géospatial | carte 2D | ✅ |
 | V0.1 | Terre paléo paramétrique | cohortes | dispersion, niveau marin | GIF + viewer web, frise | ✅ |
-| V0.2 | Terre paléo Beyer 2020 | cohortes + archaïques | dates d'arrivée vs archéologie | idem + choix du climat | 🔧 en cours |
-| V0.3 | idem | démographie, refuges, goulots, extinctions locales | P(arrivée) sur ensembles ; calibration/validation séparées | **globe 3D** (R1) + couches climat/biomes | ⏳ |
+| V0.2 | Terre paléo Beyer 2020 | cohortes + archaïques | dates d'arrivée vs archéologie | **globe 3D** (R1, livré en avance) + calques climat | 🔧 runs Beyer OK, résultats à lire |
+| V0.3 | idem | démographie, refuges, goulots, extinctions locales | P(arrivée) sur ensembles ; calibration/validation séparées | comparaison de runs côte à côte, distributions | ⏳ |
 | V0.4 | −50k → −5k | culture cumulative simple, oubli technologique, avantage compétitif émergent (remplace α) | sortie d'Afrique ~60k sans α fixé à la main | timeline des savoirs par région | ⏳ |
 | V0.5 | Holocène | plantes/animaux exploitables (traits), domestication | P(agriculture) par foyer (Croissant fertile, Chine, Mésoamérique, Andes, Nouvelle-Guinée, Sahel) | carte des foyers + probabilités | ⏳ |
 | V0.6 | Holocène + sols (SoilGrids comme ancre) | stockage, sédentarisation, villages, maladies (zoonoses) | densités, croissance post-agricole | **carte stratégique** (R2) : villages, réseaux | ⏳ |
@@ -61,8 +61,9 @@ du projet.
 ### Piste visuelle (rendu LOD)
 
 - **R0 — Carte 2D** (fait) : population, glaces, côtes, frise niveau marin, validation par région.
-- **R1 — Globe 3D** (V0.3) : Three.js, même données que R0, couches activables (température,
-  précipitations, NPP, biomes, glaces), rotation, défilement du temps. Faisable dès maintenant.
+- **R1 — Globe 3D** (fait, v0.2.2) : Three.js, même texture que R0, calques Humains /
+  Température / Précipitations / Productivité, rotation et zoom, défilement du temps.
+  À venir : relief (displacement), biomes, comparaison de deux runs.
 - **R2 — Carte stratégique** (V0.6–V0.7) : villages, routes commerciales, frontières culturelles
   (langue, génétique), flux.
 - **R3 — Zoom local** (V1.0) : tuiles/voxels 3D avec `InstancedMesh`, tilt-shift, rendu direct

@@ -22,6 +22,10 @@ class SupabaseError(RuntimeError):
     pass
 
 
+def configured() -> bool:
+    return bool(os.environ.get("SUPABASE_URL") and os.environ.get("SUPABASE_SERVICE_ROLE_KEY"))
+
+
 def _env():
     url = os.environ.get("SUPABASE_URL", "").rstrip("/")
     key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
@@ -76,6 +80,8 @@ def publish_run(export_dir: Path, manifest: dict) -> str:
     upload(f"{prefix}/manifest.json", json.dumps(manifest, ensure_ascii=False).encode(), "application/json")
     if manifest["frames"]["years"]:
         upload(f"{prefix}/frames.bin.gz", (export_dir / "frames.bin.gz").read_bytes(), "application/octet-stream")
+    if manifest.get("climate"):
+        upload(f"{prefix}/climate.bin.gz", (export_dir / "climate.bin.gz").read_bytes(), "application/octet-stream")
 
     insert("region_results", [{
         "run_id": run_id, "region": r["region"], "model_bp": r["model_bp"],

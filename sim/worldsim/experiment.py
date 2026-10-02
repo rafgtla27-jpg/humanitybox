@@ -19,7 +19,8 @@ class RunResult:
     seed: int
     tracker: RegionTracker
     log: list
-    snapshots: dict = field(default_factory=dict)  # year -> (N, ice, land_frac)
+    snapshots: dict = field(default_factory=dict)  # year -> (N, A, ice, land_frac)
+    climate: dict = field(default_factory=dict)    # year -> (temperature, precipitation, npp)
 
 
 ARCHAIC = HumanParams(p_sea=0.0)  # mobiles, mais confinés à une aire imposée par les données
@@ -55,12 +56,14 @@ def run(seed: int = 1, start: int = -120_000, end: int = -10_000, params: HumanP
     tracker = RegionTracker(grid)
     sim.observe(500, tracker)
     snaps: dict = {}
+    clim: dict = {}
     if snapshot_every:
         def snap(s: Simulation, year: int):
             e = s.state["earth"]
             A = s.state.get("A")
             snaps[year] = (s.state["N"].copy(), None if A is None else A.copy(), e.ice.copy(), e.land_frac.copy())
+            clim[year] = (e.temperature.astype(np.float32), e.precipitation.astype(np.float32), e.npp.astype(np.float32))
         sim.observe(snapshot_every, snap)
 
     sim.run(progress=progress)
-    return RunResult(seed, tracker, sim.log.events, snaps)
+    return RunResult(seed, tracker, sim.log.events, snaps, clim)

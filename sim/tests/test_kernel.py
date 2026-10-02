@@ -45,3 +45,22 @@ def test_bering_land_bridge_at_lgm():
     lf_lgm = EARTH.state(-21_000).land_frac[bering].mean()
     lf_now = EARTH.state(0).land_frac[bering].mean()
     assert lf_lgm > 0.9 and lf_now < 0.6
+
+
+def test_export_writes_frames_and_climate(tmp_path):
+    import gzip
+    import json
+
+    from worldsim.export import export_run
+    from worldsim.publish import configured
+
+    r = run(seed=1, start=-60_000, end=-56_000, grid=GRID, earth=EARTH, snapshot_every=2000)
+    m = export_run(r, GRID, tmp_path, {"experiment_id": "t", "scenario": "A", "label": "t", "seed": 1,
+                                       "params": {}, "climate_provider": EARTH.name,
+                                       "start_year": -60_000, "end_year": -56_000})
+    n = len(m["frames"]["years"])
+    plane = GRID.ny * GRID.nx
+    assert len(gzip.decompress((tmp_path / "frames.bin.gz").read_bytes())) == n * 3 * plane
+    assert len(gzip.decompress((tmp_path / "climate.bin.gz").read_bytes())) == n * 3 * plane
+    assert json.loads((tmp_path / "manifest.json").read_text())["climate"]["layers"] == ["temperature", "precipitation", "npp"]
+    assert configured() is False  # pas de secrets en test : la publication doit être ignorée, pas planter

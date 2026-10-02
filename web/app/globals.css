@@ -90,3 +90,31 @@ button { font: inherit; color: inherit; }
 .colophon { margin-top: 40px; color: var(--mist); font-size: 0.82rem; max-width: 80ch; }
 
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+
+/* Vue et calques */
+.controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; margin-bottom: 12px; }
+.seg { display: inline-flex; border: 1px solid var(--shelf); border-radius: 3px; overflow-x: auto; max-width: 100%; scrollbar-width: none; }
+.seg button { white-space: nowrap; flex: 0 0 auto; }
+.seg button {
+  background: transparent; border: 0; padding: 7px 12px; cursor: pointer; font-size: 0.9rem; color: var(--mist);
+}
+.seg button + button { border-left: 1px solid var(--shelf); }
+.seg button[aria-pressed="true"] { background: var(--shelf); color: var(--bone); }
+.seg button:hover { color: var(--bone); }
+.layer-legend { display: flex; align-items: center; gap: 8px; margin: 0 0 0 auto; color: var(--mist); font-size: 0.82rem; flex-wrap: wrap; }
+.ramp { display: inline-block; width: 140px; height: 8px; border-radius: 1px; }
+.dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-left: 6px; }
+.dot-sapiens { background: var(--ochre); }
+.dot-archaic { background: var(--lichen); }
+.dot-ice { background: #e9f1f3; }
+
+.globe {
+  margin: 0; width: 100%; height: min(72vh, 680px); min-height: 320px; position: relative;
+  cursor: grab; touch-action: none;
+  background: radial-gradient(ellipse at 50% 45%, #163a50 0%, var(--abyss) 62%);
+  border: 1px solid var(--shelf);
+}
+.globe:active { cursor: grabbing; }
+.globe canvas { display: block; }
+.globe-loading { display: grid; place-items: center; color: var(--mist); }
+@media (max-width: 640px) { .globe { height: 92vw; } .layer-legend { margin-left: 0; } }

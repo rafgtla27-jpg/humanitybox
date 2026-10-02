@@ -20,11 +20,20 @@ export type Manifest = {
   end_year: number;
   grid: { ny: number; nx: number; res: number; lat_top: number; lon_left: number };
   frames: { years: number[]; layers: string[]; density_lo: number; density_hi: number; file: string };
+  climate?: {
+    file: string;
+    layers: string[];
+    temperature: ClimateSpec;
+    precipitation: ClimateSpec;
+    npp: ClimateSpec;
+  } | null;
   regions: RegionRow[];
   events: { year: number; kind: string; region: string; data: Record<string, string> }[];
   series: { years: number[]; total: number[]; by_region: Record<string, number[]> };
   forcing: { years: number[]; sea_level: number[]; monsoon: number[] };
 };
+
+export type ClimateSpec = { min: number; max: number; scale: string; unit: string };
 
 export type RunRef = { key: string; title: string; detail: string; manifestUrl: string; baseUrl: string };
 
@@ -64,19 +73,29 @@ export async function listRuns(): Promise<RunRef[]> {
   });
 }
 
-export async function loadRun(ref: RunRef): Promise<{ manifest: Manifest; frames: Uint8Array }> {
-  const manifest: Manifest = await (await fetch(ref.manifestUrl)).json();
-  const res = await fetch(`${ref.baseUrl}/${manifest.frames.file}`);
-  if (!res.ok) throw new Error(`Frames introuvables (${res.status}).`);
-  let frames = new Uint8Array(await res.arrayBuffer());
+async function fetchBinary(url: string): Promise<Uint8Array> {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Fichier introuvable (${res.status}) : ${url.split("/").pop()}`);
+  let bytes = new Uint8Array(await res.arrayBuffer());
   // Certains hébergeurs décompressent déjà les .gz (Content-Encoding) : on vérifie l'en-tête gzip.
-  if (frames[0] === 0x1f && frames[1] === 0x8b) {
-    const stream = new Blob([frames]).stream().pipeThrough(new DecompressionStream("gzip"));
-    frames = new Uint8Array(await new Response(stream).arrayBuffer());
+  if (bytes[0] === 0x1f && bytes[1] === 0x8b) {
+    const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip"));
+    bytes = new Uint8Array(await new Response(stream).arrayBuffer());
   }
+  return bytes;
+}
+
+export async function loadRun(ref: RunRef): Promise<{ manifest: Manifest; frames: Uint8Array; climate: Uint8Array | null }> {
+  const res = await fetch(ref.manifestUrl);
+  if (!res.ok) throw new Error(`Manifest introuvable (${res.status}).`);
+  const manifest: Manifest = await res.json();
   const expected = manifest.frames.years.length * 3 * manifest.grid.ny * manifest.grid.nx;
+  const [frames, climate] = await Promise.all([
+    fetchBinary(`${ref.baseUrl}/${manifest.frames.file}`),
+    manifest.climate ? fetchBinary(`${ref.baseUrl}/${manifest.climate.file}`).catch(() => null) : Promise.resolve(null),
+  ]);
   if (frames.length !== expected) throw new Error(`Frames corrompues : ${frames.length} octets au lieu de ${expected}.`);
-  return { manifest, frames };
+  return { manifest, frames, climate: climate && climate.length === expected ? climate : null };
 }
 
 export const bp = (year: number) => `${Math.round(-year / 1000)} 000`.replace(/^0 000$/, "0");
