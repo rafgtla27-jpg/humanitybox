@@ -10,6 +10,11 @@ on:
         type: choice
         options: [A, B]
         default: B
+      climate:
+        description: "Climat (beyer = reconstruction Beyer et al. 2020, parametric = provisoire)"
+        type: choice
+        options: [beyer, parametric]
+        default: beyer
       seeds:
         description: "Seeds séparées par des virgules (le premier exporte les frames)"
         default: "1,2,3"
@@ -33,18 +38,27 @@ jobs:
           cache: pip
       - uses: actions/cache@v4
         with:
-          path: sim/data
+          path: |
+            sim/data/etopo10_ice_g_i2.*
+            sim/data/ETOPO10_LICENSE
           key: etopo10-v1
-      - run: pip install -e ".[dev]"
-      - run: python scripts/fetch_data.py
+      - if: inputs.climate == 'beyer'
+        uses: actions/cache@v4
+        with:
+          path: sim/data/Beyer2020_annual_vars_v1.2.2.nc
+          key: beyer2020-annual-v1.2.2
+      - run: pip install -e ".[dev,climate]"
+      - run: python scripts/fetch_data.py ${{ inputs.climate == 'beyer' && '--beyer' || '' }}
       - run: python -m pytest -q
+      - if: inputs.climate == 'beyer'
+        run: python scripts/inspect_netcdf.py data/Beyer2020_annual_vars_v1.2.2.nc
       - name: Simulation
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
-          python run_experiment_001.py --scenario ${{ inputs.scenario }} --seeds "${{ inputs.seeds }}" \
-            ${{ inputs.publish && '--publish' || '' }}
+          python run_experiment_001.py --scenario ${{ inputs.scenario }} --seeds "${{ inputs.seeds }}" --climate ${{ inputs.climate }} \
+            --gif ${{ inputs.publish && '--publish' || '' }}
           python run_experiment_001.py --chart
       - uses: actions/upload-artifact@v4
         with:
