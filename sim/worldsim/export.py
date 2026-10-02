@@ -20,7 +20,7 @@ import numpy as np
 
 from .earth import Grid, monsoon_index, sea_level
 
-ENGINE_VERSION = "0.2.0"
+ENGINE_VERSION = "0.2.1"
 LO, HI = 1e-3, 0.5  # hab/km²
 
 

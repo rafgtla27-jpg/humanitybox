@@ -5,7 +5,8 @@ Sci Data 7, 236. doi:10.1038/s41597-020-0552-1
 
 Fichier utilisé : la version repackagée par pastclim (Zenodo 7388091)
     Beyer2020_annual_vars_v1.2.2.nc
-    dims  : time (années depuis 1950, négatives), latitude, longitude ; 0,5°
+    dims  : time (72 tranches, années depuis 1950, négatives), latitude (-59.75..89.75,
+            croissante), longitude (-179.75..179.75) ; 0,5° ; Antarctique absent
     vars  : bio01 (°C), bio12 (mm/an), npp (gC/m²/an), biome (BIOME4, 28 = glace),
             altitude (m), rugosity (m)
     mer   : NaN (le trait de côte suit le niveau marin de la reconstruction)
@@ -90,14 +91,22 @@ class BeyerPaleoEarth:
             raw = {k: load(v) for k, v in VARS.items()}
             biome = load("biome")
 
-        # Orientation : nord en haut, longitudes croissantes depuis -180
-        if lat[0] < lat[-1]:
-            raw = {k: v[:, ::-1] for k, v in raw.items()}
-            biome = biome[:, ::-1]
-        if lon.min() >= 0:  # 0..360 → -180..180
-            shift = int(np.searchsorted(lon, 180))
-            raw = {k: np.roll(v, -shift, axis=2) for k, v in raw.items()}
-            biome = np.roll(biome, -shift, axis=2)
+        # Placement sur une grille globale par coordonnées : le fichier réel ne couvre que
+        # -60°..90° (l'Antarctique est exclu) et l'ordre des axes peut varier.
+        ny_src, nx_src = int(round(180 / res)), int(round(360 / res))
+        lon = ((lon + 180) % 360) - 180
+        rows = np.round((90 - lat) / res - 0.5).astype(int)
+        cols = np.round((lon + 180) / res - 0.5).astype(int)
+        if rows.min() < 0 or rows.max() >= ny_src or cols.min() < 0 or cols.max() >= nx_src:
+            raise ValueError("coordonnées hors de la grille globale attendue")
+
+        def to_global(a: np.ndarray) -> np.ndarray:
+            out = np.full((a.shape[0], ny_src, nx_src), np.nan, dtype=np.float32)
+            out[:, rows[:, None], cols[None, :]] = a
+            return out
+
+        raw = {k: to_global(v) for k, v in raw.items()}
+        biome = to_global(biome)
 
         ice = biome == ICE_BIOME
         land = np.isfinite(biome) & (biome > 0)

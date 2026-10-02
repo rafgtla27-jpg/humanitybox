@@ -40,3 +40,9 @@ rugosité et trait de côte de Beyer et al. 2020 (version pastclim, Zenodo 73880
 et interpolés entre tranches. NPP convertie de gC en matière sèche (× 2,2) pour garder
 `HumanParams` inchangé. Lecteur testé sur fichier synthétique ; à confirmer sur le vrai fichier
 (`scripts/inspect_netcdf.py` affiche sa structure dans les logs du workflow).
+
+**v0.2.1** — Premier run CI sur le vrai fichier Beyer : échec `(180,360)` vs `(150,360)`.
+Le fichier ne couvre que −60°..90° (Antarctique absent). Le lecteur place désormais les données
+sur une grille globale par coordonnées ; le test reproduit le format réel relevé par
+`inspect_netcdf.py` (72 tranches, pas de 2 000 ans avant −22k puis 1 000 ans).
+Leçon : l'étape d'inspection en CI a permis de diagnostiquer en une passe.

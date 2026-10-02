@@ -67,6 +67,7 @@ npm run dev                            # sans variables d'env : runs de démo da
 La clé `service_role` ne va **que** dans les secrets GitHub. Le viewer n'utilise que la clé anon,
 et RLS n'autorise que la lecture.
 
-## Règles du laboratoire
+## Roadmap et règles du laboratoire
 
-Voir [`docs/DECISIONS.md`](docs/DECISIONS.md).
+- [`docs/ROADMAP.md`](docs/ROADMAP.md) : vision, versions, piste visuelle, registre complet des idées.
+- [`docs/DECISIONS.md`](docs/DECISIONS.md) : principes et journal des expériences.
