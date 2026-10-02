@@ -43,6 +43,12 @@ class HumanParams:
     cold_gain: float = 1 / 8000  # /an : vitesse d'innovation sous contrainte de froid
     cold_loss: float = 1 / 4000  # /an : perte quand le réseau humain est trop petit (effet Tasmanie)
     cold_ncrit: float = 2000.0  # personnes dans le voisinage 3×3 nécessaires pour maintenir le savoir
+    # --- V0.3 : contingence explicite
+    demo_noise: float = 0.06    # /an : naissances + décès par personne (bruit démographique ∝ √N)
+    ldd_rate: float = 1 / 4000  # /an par cellule à N = K : départ d'un groupe pionnier lointain
+    ldd_founders: float = 30.0  # taille d'un groupe pionnier (une bande)
+    ldd_min: int = 3            # distance du saut, en cellules (~300 km)…
+    ldd_max: int = 8            # …à ~900 km, par voie de terre (au plus une cellule d'eau)
 
 
 ADJ = [(-1, 0, 1.0), (1, 0, 1.0), (0, -1, 1.0), (0, 1, 1.0),
@@ -177,6 +183,47 @@ class Demography:
             return move(N)
         return move(N), [move(X) for X in carried]
 
+    def _long_jumps(self, sim, N, K, p, dt, rng, c):
+        """Sauts de groupes pionniers. Renvoie (N, c) mis à jour et journalise les fondations."""
+        pressure = np.where(K > 0, np.clip(N / np.maximum(K, 1e-9), 0, 1), 0)
+        prob = p.ldd_rate * dt * pressure * (N > 4 * p.ldd_founders)
+        sources = np.flatnonzero(rng.random(N.shape, dtype=np.float32).ravel() < prob.ravel())
+        if sources.size == 0:
+            return N, c
+        ny, nx = N.shape
+        passable = sim.state["passable"]
+        Nf = N.ravel().copy()
+        cf = None if c is None else c.ravel().copy()
+        Kf = K.ravel()
+        for src in sources:
+            i, j = divmod(int(src), nx)
+            dist = int(rng.integers(p.ldd_min, p.ldd_max + 1))
+            ang = rng.random() * 2 * np.pi
+            di, dj = np.sin(ang), np.cos(ang)
+            ti = int(round(i + di * dist))
+            if ti < 0 or ti >= ny:
+                continue
+            tj = int(round(j + dj * dist)) % nx
+            # Le trajet doit rester terrestre (une seule cellule d'eau tolérée)
+            wet = 0
+            for k in range(1, dist):
+                ii = int(round(i + di * k))
+                jj = int(round(j + dj * k)) % nx
+                if not passable[ii, jj]:
+                    wet += 1
+            dst = ti * nx + tj
+            if wet > 1 or not passable[ti, tj] or Kf[dst] <= 0 or Nf[dst] >= 0.5 * Kf[dst]:
+                continue
+            f = min(p.ldd_founders, Nf[src] * 0.25)
+            if cf is not None:
+                cf[dst] = (cf[dst] * Nf[dst] + cf[src] * f) / (Nf[dst] + f)
+            Nf[src] -= f
+            Nf[dst] += f
+            if Nf[dst] - f < 1 and sim.state.get("log_jumps", False):
+                sim.log.emit(sim.year, "PIONNIERS", f"{90 - ti - 0.5:.0f}°, {tj - 180 + 0.5:.0f}°", depuis=f"{90 - i - 0.5:.0f}°, {j - 180 + 0.5:.0f}°")
+        N = Nf.reshape(N.shape).astype(np.float32)
+        return N, (None if cf is None else cf.reshape(N.shape).astype(np.float32))
+
     def _neighborhood(self, N: np.ndarray) -> np.ndarray:
         padded = self._pad(N)
         return sum(self._view(padded, di, dj, N.shape) for di in (-1, 0, 1) for dj in (-1, 0, 1))
@@ -230,7 +277,21 @@ class Demography:
                 else:
                     N = self.migrate(N, room, out_rate, hop_coefs)
 
-            # 3. Stochasticité démographique : les petits groupes peuvent disparaître
+            # 3. Contingence
+            # 3a. Bruit démographique : naissances et décès sont des événements discrets ;
+            #     écart-type ∝ √N, négligeable pour une grande population, décisif pour une petite.
+            if p.demo_noise > 0:
+                sd = np.sqrt(np.maximum(N, 0) * p.demo_noise * dt).astype(np.float32)
+                N = np.maximum(N + sd * rng.standard_normal(N.shape, dtype=np.float32), 0)
+            # 3b. Dispersion lointaine : de rares groupes pionniers partent loin devant le front.
+            #     C'est ce qui rend chaque histoire différente : où et quand ils partent, s'ils survivent.
+            if p.ldd_rate > 0 and (p.m_base > 0 or p.m_press > 0):
+                if dynamic:
+                    N, c = self._long_jumps(sim, N, K, p, dt, rng, c)
+                else:
+                    N, _ = self._long_jumps(sim, N, K, p, dt, rng, None)
+
+            # 3c. Les petits groupes peuvent disparaître
             small = (N > 0) & (N < p.allee_n)
             dies = small & (rng.random(N.shape, dtype=np.float32) < 1 - (1 - p.p_ext) ** dt)
             N = np.where(dies | (N < 1), 0, N)

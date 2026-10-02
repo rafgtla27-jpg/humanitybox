@@ -1,0 +1,188 @@
+{
+ "experiment_id": "exp-001-dispersal",
+ "scenario": "B",
+ "label": "Eurasie habitée (α 0.9 / 1.1)",
+ "climate_provider": "parametric-v0.1",
+ "engine_version": "0.3.0",
+ "n_runs": 5,
+ "seeds": [
+  1,
+  2,
+  3,
+  4,
+  5
+ ],
+ "regions": [
+  {
+   "region": "Levant",
+   "target": [
+    130000,
+    50000
+   ],
+   "arrivals": [
+    113000,
+    113000,
+    113500,
+    113000,
+    113500
+   ],
+   "p_reached": 1.0,
+   "p_in_range": 1.0,
+   "p10": 113000.0,
+   "median": 113000.0,
+   "p90": 113500.0
+  },
+  {
+   "region": "Asie du Sud",
+   "target": [
+    80000,
+    45000
+   ],
+   "arrivals": [
+    91500,
+    90500,
+    91000,
+    91000,
+    91000
+   ],
+   "p_reached": 1.0,
+   "p_in_range": 0.0,
+   "p10": 90700.0,
+   "median": 91000.0,
+   "p90": 91300.0
+  },
+  {
+   "region": "Chine du Sud",
+   "target": [
+    80000,
+    40000
+   ],
+   "arrivals": [
+    69500,
+    67500,
+    67000,
+    67000,
+    66500
+   ],
+   "p_reached": 1.0,
+   "p_in_range": 1.0,
+   "p10": 66700.0,
+   "median": 67000.0,
+   "p90": 68700.0
+  },
+  {
+   "region": "Europe",
+   "target": [
+    55000,
+    42000
+   ],
+   "arrivals": [
+    105000,
+    104500,
+    104500,
+    104500,
+    104000
+   ],
+   "p_reached": 1.0,
+   "p_in_range": 0.0,
+   "p10": 104200.0,
+   "median": 104500.0,
+   "p90": 104800.0
+  },
+  {
+   "region": "Australie",
+   "target": [
+    65000,
+    45000
+   ],
+   "arrivals": [
+    42000,
+    40500,
+    39000,
+    40000,
+    40000
+   ],
+   "p_reached": 1.0,
+   "p_in_range": 0.0,
+   "p10": 39400.0,
+   "median": 40000.0,
+   "p90": 41400.0
+  },
+  {
+   "region": "Japon",
+   "target": [
+    40000,
+    30000
+   ],
+   "arrivals": [
+    49000,
+    48000,
+    47000,
+    48500,
+    47500
+   ],
+   "p_reached": 1.0,
+   "p_in_range": 0.0,
+   "p10": 47200.0,
+   "median": 48000.0,
+   "p90": 48800.0
+  },
+  {
+   "region": "Arctique sibérien",
+   "target": [
+    45000,
+    28000
+   ],
+   "arrivals": [
+    10000,
+    10000,
+    10000,
+    10000,
+    10000
+   ],
+   "p_reached": 1.0,
+   "p_in_range": 0.0,
+   "p10": 10000.0,
+   "median": 10000.0,
+   "p90": 10000.0
+  },
+  {
+   "region": "Amérique du Nord (sud des glaces)",
+   "target": [
+    24000,
+    13000
+   ],
+   "arrivals": [
+    null,
+    null,
+    null,
+    null,
+    null
+   ],
+   "p_reached": 0.0,
+   "p_in_range": 0.0,
+   "p10": null,
+   "median": null,
+   "p90": null
+  },
+  {
+   "region": "Amérique du Sud",
+   "target": [
+    20000,
+    12000
+   ],
+   "arrivals": [
+    null,
+    null,
+    null,
+    null,
+    null
+   ],
+   "p_reached": 0.0,
+   "p_in_range": 0.0,
+   "p10": null,
+   "median": null,
+   "p90": null
+  }
+ ]
+}

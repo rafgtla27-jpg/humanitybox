@@ -186,3 +186,7 @@ button { font: inherit; color: inherit; }
 }
 @media (prefers-reduced-motion: reduce) { .hud, .sim-loading { transition: none; animation: none; } }
 .popover-note { margin: 6px 6px 4px; padding-top: 8px; border-top: 1px solid rgba(255, 255, 255, 0.08); font-size: 0.78rem; color: #8d8d88; max-width: 26ch; }
+.ens-dot { fill: var(--bone); opacity: 0.55; }
+.t-prob { fill: var(--rust); font-size: 11px; font-family: var(--sans); font-variant-numeric: tabular-nums; }
+.t-prob.p-ok { fill: var(--lichen); }
+.key-ens { width: 6px; height: 6px; border-radius: 50%; background: var(--bone); opacity: 0.7; }

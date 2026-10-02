@@ -36,7 +36,17 @@ export type Manifest = {
 
 export type ClimateSpec = { min: number; max: number; scale: string; unit: string };
 
-export type RunRef = { key: string; title: string; detail: string; manifestUrl: string; baseUrl: string };
+export type RunRef = { key: string; title: string; detail: string; manifestUrl: string; baseUrl: string; ensembleUrl?: string };
+
+export type EnsembleRegion = {
+  region: string;
+  target: [number, number];
+  arrivals: (number | null)[];
+  p_reached: number;
+  p_in_range: number;
+  median: number | null;
+};
+export type Ensemble = { n_runs: number; engine_version: string; climate_provider: string; regions: EnsembleRegion[] };
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/$/, "");
 const ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -44,13 +54,14 @@ export const source: "supabase" | "demo" = SUPABASE_URL && ANON ? "supabase" : "
 
 export async function listRuns(): Promise<RunRef[]> {
   if (source === "demo") {
-    const index: { dir: string; title: string; detail: string }[] = await (await fetch("/demo/index.json")).json();
+    const index: { dir: string; title: string; detail: string; ensemble?: string }[] = await (await fetch("/demo/index.json")).json();
     return index.map((r) => ({
       key: r.dir,
       title: r.title,
       detail: r.detail,
       manifestUrl: `/demo/${r.dir}/manifest.json`,
       baseUrl: `/demo/${r.dir}`,
+      ensembleUrl: r.ensemble ? `/demo/${r.ensemble}` : undefined,
     }));
   }
   const res = await fetch(
@@ -107,6 +118,42 @@ export async function loadRun(
     climate: climate && climate.length === expected ? climate : null,
     extra: extra && extra.length === extraExpected ? extra : null,
   };
+}
+
+/** Toutes les seeds du même scénario, climat et moteur que le run affiché. */
+export async function loadEnsemble(ref: RunRef, m: Manifest): Promise<Ensemble | null> {
+  try {
+    if (source === "demo") {
+      if (!ref.ensembleUrl) return null;
+      const res = await fetch(ref.ensembleUrl);
+      return res.ok ? await res.json() : null;
+    }
+    const h = { apikey: ANON!, Authorization: `Bearer ${ANON}` };
+    const runs: { id: string }[] = await (await fetch(
+      `${SUPABASE_URL}/rest/v1/runs?select=id&experiment_id=eq.${m.experiment_id}&scenario=eq.${m.scenario}` +
+        `&climate_provider=eq.${encodeURIComponent(m.climate_provider)}&engine_version=eq.${m.engine_version}&limit=500`,
+      { headers: h },
+    )).json();
+    if (runs.length < 2) return null;
+    const rows: { run_id: string; region: string; model_bp: number | null }[] = await (await fetch(
+      `${SUPABASE_URL}/rest/v1/region_results?select=run_id,region,model_bp&run_id=in.(${runs.map((r) => r.id).join(",")})`,
+      { headers: h },
+    )).json();
+    const regions = m.regions.map((r) => {
+      const arrivals = rows.filter((x) => x.region === r.region).map((x) => x.model_bp);
+      const reached = arrivals.filter((a): a is number => a !== null).sort((a, b) => a - b);
+      const inRange = reached.filter((a) => a <= r.target[0] && a >= r.target[1]).length;
+      return {
+        region: r.region, target: r.target, arrivals,
+        p_reached: reached.length / Math.max(1, arrivals.length),
+        p_in_range: inRange / Math.max(1, arrivals.length),
+        median: reached.length ? reached[Math.floor(reached.length / 2)] : null,
+      };
+    });
+    return { n_runs: runs.length, engine_version: m.engine_version, climate_provider: m.climate_provider, regions };
+  } catch {
+    return null;
+  }
 }
 
 export const bp = (year: number) => `${Math.round(-year / 1000)} 000`.replace(/^0 000$/, "0");

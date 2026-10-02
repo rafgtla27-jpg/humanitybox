@@ -68,3 +68,23 @@ def test_culture_extends_cold_tolerance():
     t = np.array([-20.0])
     assert cold_factor(t, p, 0.0)[0] == 0
     assert cold_factor(t, p, 1.0)[0] > 0.3
+
+
+def test_ensemble_summary_probabilities():
+    from worldsim.ensemble import score, summarize
+    def m(seed, a):
+        return {"experiment_id": "e", "scenario": "B", "label": "B", "climate_provider": "c", "engine_version": "0.3.0",
+                "seed": seed, "regions": [{"region": "Australie", "target": [65000, 45000], "model_bp": a}]}
+    sm = summarize([m(1, 50000), m(2, 40000), m(3, None), m(4, 60000)])[0]
+    r = sm["regions"][0]
+    assert sm["n_runs"] == 4 and r["p_reached"] == 0.75 and r["p_in_range"] == 0.5
+    assert score(sm) == 0.5
+
+
+def test_contingency_makes_worlds_differ_but_seed_is_reproducible():
+    from worldsim.experiment import run
+    a = run(seed=1, start=-120_000, end=-116_000, grid=GRID, earth=EARTH)
+    b = run(seed=2, start=-120_000, end=-116_000, grid=GRID, earth=EARTH)
+    a2 = run(seed=1, start=-120_000, end=-116_000, grid=GRID, earth=EARTH)
+    assert a.tracker.total == a2.tracker.total
+    assert a.tracker.total != b.tracker.total

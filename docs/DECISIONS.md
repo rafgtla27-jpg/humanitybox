@@ -118,3 +118,22 @@ stables par cellule pour que la croissance et le déclin se voient comme des app
 disparitions. Le petit mouvement sur place est décoratif et le restera tant qu'il n'y a pas
 d'agents (S3, V0.7–V0.8). Sous les humains, le sol montre la végétation (NPP atténuée) et la
 densité devient un voile ocre : en vue d'ensemble on lit la dispersion, de près on voit les gens.
+
+**Moteur 0.3.1 — contingence explicite et ensembles**
+
+1. *Bruit démographique* : naissances et décès discrets, écart-type ∝ √N (taux 0,06/an).
+   Négligeable pour une grande population, décisif pour un groupe pionnier.
+2. *Dispersion lointaine* : de rares groupes de 30 personnes sautent de 300 à 900 km devant le
+   front (taux ∝ pression démographique, trajet terrestre avec au plus une cellule d'eau).
+   Leur survie dépend ensuite du bruit et du seuil d'extinction des petits groupes.
+3. Constat (climat provisoire) : en monde vide (A), les seeds divergent toujours peu (±1 000 ans)
+   car rien ne bloque le front ; en B, la contingence apparaît aux goulots : l'Australie est
+   atteinte entre 39k et 42k selon le monde, pas atteinte à 40k dans une seed. La contingence
+   naît des seuils, pas du hasard seul.
+4. *Ensembles* : `ensemble.py` résume N mondes par région (P(atteinte), P(dans la fourchette),
+   médiane, 10–90 %). Workflow GitHub `ensemble` : N seeds réparties sur plusieurs machines en
+   parallèle, puis agrégation. Le viewer `/labo` affiche un point par monde et la probabilité.
+5. Coût : ~90 s par run B sur un CPU de test. Un ensemble de 20 mondes sur 5 machines ≈ 8 min.
+
+Prochaine étape V0.3 : calibration honnête des paramètres culturels (gain, perte, seuil) sur
+Europe + Sibérie avec ensembles, validation sur Sahul et Amériques. Nécessite les runs Beyer.

@@ -1,6 +1,6 @@
 [project]
 name = "worldsim"
-version = "0.3.0"
+version = "0.3.1"
 description = "WORLD_SIM — laboratoire d'émergence historique (moteur de simulation)"
 requires-python = ">=3.11"
 dependencies = ["numpy>=1.26", "scipy>=1.11", "matplotlib>=3.8", "pillow>=10"]

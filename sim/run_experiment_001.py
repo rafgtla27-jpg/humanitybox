@@ -36,8 +36,12 @@ def main():
     ap.add_argument("--publish", action="store_true")
     ap.add_argument("--chart", action="store_true")
     ap.add_argument("--climate", choices=["parametric", "beyer"], default="parametric")
+    ap.add_argument("--no-frames", action="store_true", help="aucune frame (seeds d'ensemble au-delà de la première)")
+    ap.add_argument("--summary", action="store_true", help="résume tous les runs de outputs/ en distributions")
     a = ap.parse_args()
 
+    if a.summary:
+        return summary()
     if a.chart:
         return chart()
 
@@ -51,7 +55,7 @@ def main():
     seeds = [int(s) for s in a.seeds.split(",")]
     for i, seed in enumerate(seeds):
         t = time.time()
-        r = run(seed=seed, grid=grid, earth=earth, snapshot_every=2000 if i == 0 else None, **kw)
+        r = run(seed=seed, grid=grid, earth=earth, snapshot_every=2000 if i == 0 and not a.no_frames else None, **kw)
         print(f"[{a.scenario}] {label} seed={seed}  {time.time() - t:.0f}s")
         out = OUT / f"{a.scenario}_{a.climate}_seed{seed}"
         meta = {
@@ -74,6 +78,19 @@ def main():
                     print("  publié :", publish_run(out, manifest))
                 except SupabaseError as e:
                     print("  ÉCHEC de publication (résultats conservés dans outputs/) :", e)
+
+
+def summary():
+    from worldsim.ensemble import load_manifests, summarize
+    sums = summarize(load_manifests(OUT))
+    for sm in sums:
+        name = f"ensemble_{sm['scenario']}_{sm['climate_provider']}_{sm['engine_version']}.json"
+        (OUT / name).write_text(json.dumps(sm, ensure_ascii=False, indent=1))
+        print(f"\n{sm['scenario']} · {sm['label']} · {sm['climate_provider']} · moteur {sm['engine_version']} · {sm['n_runs']} runs")
+        for r in sm["regions"]:
+            med = "jamais" if r["median"] is None else f"{r['median'] / 1000:.1f}k [{r['p10'] / 1000:.1f}–{r['p90'] / 1000:.1f}]"
+            print(f"  {r['region'][:34]:<36} atteinte {r['p_reached']:>5.0%}  dans la fourchette {r['p_in_range']:>5.0%}  {med}")
+        print("  ->", OUT / name)
 
 
 def chart():

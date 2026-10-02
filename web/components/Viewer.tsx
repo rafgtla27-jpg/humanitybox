@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { bp, listRuns, loadRun, source, type RunRef } from "@/lib/data";
+import { bp, listRuns, loadEnsemble, loadRun, source, type Ensemble, type RunRef } from "@/lib/data";
 import { RAMPS, availableLayers, legendFor, paintFrame, type Layer, type RunData } from "@/lib/paint";
 
 const Globe = dynamic(() => import("./Globe"), {
@@ -12,7 +12,7 @@ const Globe = dynamic(() => import("./Globe"), {
 // Bande de latitudes affichée (les pôles n'apportent rien ici)
 const LAT_TOP = 80;
 const LAT_BOTTOM = -60;
-const LABEL_W = 190;
+const LABEL_W = 250;
 
 type Loaded = RunData;
 type View = "globe" | "map";
@@ -38,6 +38,7 @@ export default function Viewer() {
   const [playing, setPlaying] = useState(false);
   const [view, setView] = useState<View>("globe");
   const [layer, setLayer] = useState<Layer>("humans");
+  const [ensemble, setEnsemble] = useState<Ensemble | null>(null);
 
   useEffect(() => {
     listRuns()
@@ -53,10 +54,12 @@ export default function Viewer() {
     if (!ref) return;
     setData(null);
     setPlaying(false);
+    setEnsemble(null);
     loadRun(ref)
       .then((d) => {
         setData(d);
         setFrame(0);
+        loadEnsemble(ref, d.manifest).then(setEnsemble);
       })
       .catch((e) => setError(String(e.message ?? e)));
   }, [active, runs]);
@@ -137,7 +140,7 @@ export default function Viewer() {
               setPlaying((p) => !p);
             }}
           />
-          <Timeline data={data} frame={frame} onScrub={(f) => { setPlaying(false); setFrame(f); }} />
+          <Timeline data={data} frame={frame} ensemble={ensemble} onScrub={(f) => { setPlaying(false); setFrame(f); }} />
           <Events data={data} frame={frame} />
           <footer className="colophon">
             Climat : {data.manifest.climate_provider}
@@ -265,7 +268,7 @@ function Readout({ data, frame, playing, onToggle }: { data: Loaded; frame: numb
   );
 }
 
-function Timeline({ data, frame, onScrub }: { data: Loaded; frame: number; onScrub: (f: number) => void }) {
+function Timeline({ data, frame, ensemble, onScrub }: { data: Loaded; frame: number; ensemble: Ensemble | null; onScrub: (f: number) => void }) {
   const [ref, width] = useWidth<HTMLDivElement>();
   const m = data.manifest;
   const years = m.frames.years;
@@ -320,6 +323,7 @@ function Timeline({ data, frame, onScrub }: { data: Loaded; frame: number; onScr
             .map((yr, k) => `${k ? "L" : "M"}${x(yr).toFixed(1)},${(y0 + rowH - 6 - (series[k] / peak) * (rowH - 12)).toFixed(1)}`)
             .join("");
           const reached = r.model_bp !== null;
+          const ens = ensemble?.regions.find((e) => e.region === r.region);
           return (
             <g key={r.region}>
               {narrow ? (
@@ -327,8 +331,16 @@ function Timeline({ data, frame, onScrub }: { data: Loaded; frame: number; onScr
               ) : (
                 <text x={0} y={y0 + rowH / 2 + 4} className="t-label">{r.region}</text>
               )}
-              <rect x={x(-r.target[0])} width={x(-r.target[1]) - x(-r.target[0])} y={y0 + 4} height={rowH - 8} className={`band v-${r.verdict === "OK" ? "ok" : "off"}`} />
+              <rect x={Math.max(labelW, x(-r.target[0]))} width={x(-r.target[1]) - Math.max(labelW, x(-r.target[0]))} y={y0 + 4} height={rowH - 8} className={`band v-${r.verdict === "OK" ? "ok" : "off"}`} />
               <path d={`${spark}L${x(m.end_year)},${y0 + rowH - 6}L${x(m.start_year)},${y0 + rowH - 6}Z`} className="spark" />
+              {ens && ens.arrivals.map((a, k) => a !== null && (
+                <circle key={k} cx={x(-a)} cy={y0 + rowH / 2 + (((k * 37) % 9) - 4) * 0.9} r={2.2} className="ens-dot" />
+              ))}
+              {ens && !narrow && (
+                <text x={labelW - 8} y={y0 + rowH / 2 + 4} textAnchor="end" className={`t-prob ${ens.p_in_range >= 0.5 ? "p-ok" : ""}`}>
+                  {Math.round(ens.p_in_range * 100)}&nbsp;%
+                </text>
+              )}
               {reached ? (
                 <line x1={x(-r.model_bp!)} x2={x(-r.model_bp!)} y1={y0 + 2} y2={y0 + rowH - 2} className="arrival" />
               ) : (
@@ -340,6 +352,11 @@ function Timeline({ data, frame, onScrub }: { data: Loaded; frame: number; onScr
         <line x1={cursor} x2={cursor} y1={0} y2={height - 18} className="cursor" />
       </svg>
       <p className="legend">
+        {ensemble && (
+          <>
+            <span className="key key-ens" /> {ensemble.n_runs} mondes (seeds) ; % = part des mondes dans la fourchette{" "}
+          </>
+        )}
         <span className="key key-band" /> fourchette archéologique{" "}
         <span className="key key-arrival" /> arrivée simulée{" "}
         <span className="key key-spark" /> population de la région
