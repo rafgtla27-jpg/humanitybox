@@ -30,8 +30,8 @@ from .ensemble import load_manifests, score, summarize
 SCENARIO = "C"
 GRID = {
     "adv_max": [0.2, 0.4],
-    "cx_n0": [2000.0, 6000.0, 20000.0],
-    "archaic_C": [0.25, 0.4, 0.55],
+    "cx_n0": [5000.0, 20000.0, 80000.0],
+    "archaic_C": [0.15, 0.35, 0.55],
 }
 # Entraînement : régions aux dates les mieux établies et directement concernées par les paramètres
 TRAIN = ["Levant", "Europe", "Asie du Sud", "Arctique sibérien"]
@@ -60,7 +60,8 @@ def report(root: Path) -> dict:
             "regions": {r["region"]: {"p_in_range": r["p_in_range"], "median": r["median"], "p_reached": r["p_reached"]} for r in s["regions"]},
         })
     rows.sort(key=lambda r: (-r["train"], r["variant"]))  # classement sur l'entraînement SEULEMENT
-    best = rows[0] if rows else None
+    # Garde-fou : si tout échoue, il n'y a rien à choisir (grille hors domaine ou défaut de structure)
+    best = rows[0] if rows and rows[0]["train"] > 0 else None
     result = {"train_regions": TRAIN, "test_regions": TEST, "grid": GRID, "ranking": rows, "chosen": best}
 
     keys = list(GRID)
@@ -72,6 +73,10 @@ def report(root: Path) -> dict:
         mark = " ← choisie" if r is best else ""
         vals = " | ".join("—" if r["params"][k] is None else f"{r['params'][k]:g}" for k in keys)
         lines.append(f"| {r['variant']}{mark} | {vals} | {r['train']:.0%} | {r['test']:.0%} |")
+    if rows and best is None:
+        lines += ["", "**Aucune variante ne réussit une seule région d'entraînement : rien n'est choisi.**",
+                  "Soit la grille est hors du domaine utile, soit le modèle a un défaut de structure.",
+                  "Lire `part max sapiens` dans les logs des runs pour savoir où ça bloque."]
     if best:
         lines += ["", f"## Variante choisie : {best['variant']}", "", "| Région | rôle | P(dans la fourchette) | médiane |", "|---|---|---|---|"]
         for name, v in best["regions"].items():

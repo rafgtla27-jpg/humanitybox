@@ -87,7 +87,8 @@ def main():
             from worldsim.render import make_gif
             make_gif(grid, r.snapshots, str(OUT / f"experiment_001_{a.scenario}_{a.climate}.gif"), f"WORLD_SIM #001 · {label} · {earth.name}")
         for row in manifest["regions"]:
-            print(f"    {row['region'][:34]:<36} {str(row['model_bp']):>8}  {row['verdict']}")
+            print(f"    {row['region'][:34]:<36} {str(row['model_bp']):>8}  {row['verdict']:<10} part max sapiens {row.get('share_max', 0):.0%}")
+        print(f"    population sapiens finale : {r.tracker.total[-1]:,.0f}".replace(",", " "))
         if a.publish:
             from worldsim.publish import SupabaseError, configured, publish_run
             if not configured():

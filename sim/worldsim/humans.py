@@ -48,9 +48,10 @@ class HumanParams:
     C_fixed: float | None = None  # valeur imposée (archaïques)
     cx_n0: float = 10000.0      # population en réseau sous laquelle le répertoire s'érode vers 0
     cx_span: float = 40.0       # C* = 1 atteint pour cx_n0 × cx_span personnes en réseau
-    cx_tau: float = 3000.0      # ans : temps de relaxation vers l'équilibre
+    cx_tau_gain: float = 2000.0  # ans : vitesse à laquelle un répertoire s'enrichit
+    cx_tau_loss: float = 6000.0  # ans : vitesse d'érosion (on oublie plus lentement qu'on n'apprend)
     adv_max: float = 0.3        # avantage compétitif pour un écart de complexité de 1
-    net_radius: int = 2         # rayon du réseau social, en cellules (2 → 5×5 ≈ 500 km)
+    net_sigma: float = 3.0      # portée du réseau social (cellules, noyau gaussien σ ≈ 330 km)
     # --- V0.3 : contingence explicite
     demo_noise: float = 0.06    # /an : naissances + décès par personne (bruit démographique ∝ √N)
     ldd_rate: float = 1 / 4000  # /an par cellule à N = K : départ d'un groupe pionnier lointain
@@ -232,6 +233,14 @@ class Demography:
         N = Nf.reshape(N.shape).astype(np.float32)
         return N, (None if cf is None else cf.reshape(N.shape).astype(np.float32))
 
+    @staticmethod
+    def network(N: np.ndarray, sigma: float) -> np.ndarray:
+        """Population du réseau social de chaque cellule : somme pondérée par un noyau gaussien
+        (contacts, mariages, échanges décroissant avec la distance). Pour une densité uniforme d
+        par cellule, renvoie ≈ d × 2πσ². Longitude périodique, latitude bornée."""
+        from scipy.ndimage import gaussian_filter
+        return gaussian_filter(N.astype(np.float32), sigma=sigma, mode=("constant", "wrap"), truncate=3.0) * (2 * np.pi * sigma ** 2)
+
     def _neighborhood(self, N: np.ndarray, radius: int = 1) -> np.ndarray:
         radius = min(radius, self.PAD)
         padded = self._pad(N)
@@ -331,7 +340,8 @@ class Demography:
 
             # 4. Culture : on innove sous la contrainte du froid si le réseau humain est assez grand,
             #    on oublie si le groupe est trop isolé (aucune technique n'est acquise pour toujours)
-            n_net = self._neighborhood(N, p.net_radius)
+            # Réseau social : un front pionnier reste relié à la population source qui le suit
+            n_net = self.network(N, p.net_sigma) if (p.complexity or dynamic) else None
             if p.complexity and p.C_fixed is None:
                 # Le répertoire culturel tend vers un équilibre fixé par la taille du réseau social :
                 # grand réseau → techniques complexes maintenues ; petit réseau → érosion.
@@ -339,7 +349,8 @@ class Demography:
                 target = np.clip(np.log(np.maximum(n_net, 1) / p.cx_n0) / np.log(p.cx_span), 0, 1)
                 if C is None:
                     C = target
-                C = C + (target - C) * (1 - np.exp(-dt / p.cx_tau))
+                tau = np.where(target > C, p.cx_tau_gain, p.cx_tau_loss)
+                C = C + (target - C) * (1 - np.exp(-dt / tau))
                 sim.state[f"complexity:{name}"] = np.where(N > 0, C, 0).astype(np.float32)
             if dynamic:
                 n_eff = n_net

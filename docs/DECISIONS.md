@@ -201,3 +201,24 @@ dépend de la taille du réseau social, donc de la densité et de la connectivit
   l'intérieur de la grille, contrairement à la calibration précédente.
 - Nouvelle calibration (scénario C) : adv_max {0,2 ; 0,4} × cx_n0 {2 000 ; 6 000 ; 20 000} ×
   archaic_C {0,25 ; 0,4 ; 0,55}, mêmes régions d'entraînement et de test.
+
+**Calibration C v0.4.0 : 0 % partout — pas de bug logiciel, un défaut de modèle**
+Logs vérifiés (108 runs) : commandes, paramètres et variantes corrects, aucune erreur ; dans tous
+les runs, sapiens n'atteint jamais 10 % de la population du Levant. Cause : le réseau social était
+compté sur 5×5 cellules et uniquement autour de chaque cellule. Par construction, un front pionnier
+qui entre en territoire néandertalien a un petit réseau local, donc un répertoire érodé, donc il
+perd. Le mécanisme était **auto-bloquant** : aucun nouvel arrivant ne pouvait jamais gagner nulle part.
+Mon test en climat provisoire passait seulement parce que le Sahara provisoire était peuplé et
+formait un couloir dense ; avec le Sahara réel de Beyer, le couloir est mince.
+
+Corrections (0.4.1), motivées par une région d'entraînement (Levant) :
+1. Réseau social gaussien de portée σ = 3 cellules (~330 km), au lieu d'un carré 5×5 : le front
+   reste relié à la population source qui le suit.
+2. On oublie plus lentement qu'on n'apprend : temps caractéristique 2 000 ans pour s'enrichir,
+   6 000 ans pour s'éroder.
+3. Garde-fou : si aucune variante ne réussit une région d'entraînement, le rapport ne « choisit »
+   rien et le dit. Diagnostic `part max sapiens` par région dans les logs de chaque run.
+4. Grille élargie : cx_n0 {5 000 ; 20 000 ; 80 000}, archaic_C {0,15 ; 0,35 ; 0,55}.
+   Vérifié en climat provisoire que la grille encadre le comportement : coin favorable → sortie
+   et expansion (trop tôt) ; coin défavorable → blocage total ; points intermédiaires → sortie
+   partielle (part max 27 % au Levant) ou blocage. La transition est abrupte, comme un seuil.

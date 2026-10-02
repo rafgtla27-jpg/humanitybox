@@ -114,3 +114,24 @@ def test_calibration_ranks_on_train_only(tmp_path):
     res = report(tmp_path)
     # v00 gagne sur l'entraînement même si v01 serait meilleure en test : on ne triche pas
     assert res["chosen"]["variant"] == "v00" and res["chosen"]["test"] == 0
+
+
+def test_social_network_kernel_counts_people():
+    from worldsim.humans import Demography
+    N = np.full((GRID.ny, GRID.nx), 100.0, np.float32)
+    n = Demography.network(N, 3.0)
+    mid = n[60:120]  # loin des pôles
+    assert np.allclose(mid, 100 * 2 * np.pi * 9, rtol=0.02)
+
+
+def test_calibration_refuses_to_choose_when_everything_fails(tmp_path):
+    import json
+
+    from worldsim.calibration import TEST, TRAIN, report
+    rows = [{"region": r, "target": [60000, 40000], "model_bp": None, "verdict": "jamais"} for r in TRAIN + TEST]
+    d = tmp_path / "x"
+    d.mkdir()
+    (d / "manifest.json").write_text(json.dumps({"experiment_id": "e", "scenario": "C", "label": "C", "climate_provider": "c",
+                                                 "engine_version": "x", "seed": 1, "variant": "v00", "params": {}, "regions": rows}))
+    assert report(tmp_path)["chosen"] is None
+    assert "rien n'est choisi" in (tmp_path / "calibration.md").read_text()

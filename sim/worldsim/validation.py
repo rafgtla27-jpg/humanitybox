@@ -52,6 +52,7 @@ class RegionTracker:
         self.total: list[float] = []
         self._peak: dict[str, float] = {r.name: 0.0 for r in REGIONS}
         self._climate_at_peak: dict[str, tuple] = {}
+        self.share_max: dict[str, float] = {r.name: 0.0 for r in REGIONS}  # diagnostic : part max de sapiens
 
     def _regional_climate(self, s, m):
         land = m & (s.land_frac > 0.02)
@@ -69,6 +70,8 @@ class RegionTracker:
             pop = float(N[m].sum())
             self.series[name].append(pop)
             others = 0.0 if A is None else float(A[m].sum())
+            if pop + others > 0:
+                self.share_max[name] = max(self.share_max[name], pop / (pop + others))
             # Arrivée = présence significative ET au moins 10 % des humains de la région
             if self.arrival[name] is None and pop >= self.threshold and pop >= 0.1 * (pop + others):
                 self.arrival[name] = year
@@ -94,5 +97,6 @@ class RegionTracker:
             bp = None if a is None else -a
             ok = bp is not None and r.target[1] <= bp <= r.target[0]
             verdict = "OK" if ok else ("jamais" if bp is None else ("trop tôt" if bp > r.target[0] else "trop tard"))
-            rows.append({"region": r.name, "model_bp": bp, "target": r.target, "verdict": verdict, "note": r.note})
+            rows.append({"region": r.name, "model_bp": bp, "target": r.target, "verdict": verdict, "note": r.note,
+                         "share_max": round(self.share_max[r.name], 3)})
         return rows
