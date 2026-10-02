@@ -70,6 +70,23 @@ du projet.
   des couches (sécheresse qui craquelle le sol, feu qui carbonise les arbres). Exige des données
   locales (végétation, sols, structures) qui n'existent qu'à partir de V0.6.
 
+### Piste sprites (personnages à l'écran)
+
+Règle : une silhouette ne montre jamais plus que ce que le moteur simule. Tant qu'il n'y a pas
+d'agents, une silhouette représente un effectif ; elle ne prend pas de décisions.
+
+- **S1 — Silhouettes de groupes** (fait, viewer 0.3.2) : une silhouette = S personnes (25 à
+  10 000 selon la population mondiale, au plus 30 000 silhouettes), position stable dans sa
+  cellule, apparition quand on zoome, sol de végétation sous les humains. Mouvement sur place
+  décoratif.
+- **S2 — Camps et villages** (V0.6) : silhouettes typées (chasseurs-cueilleurs, agriculteurs),
+  structures (campements, huttes, greniers) quand la sédentarisation existe dans le moteur.
+- **S3 — Agents réels dans la zone regardée** (V0.7–V0.8, résolution adaptative) : la cohorte se
+  décompose en groupes puis en individus là où l'on zoome ; trajets réels, caravanes sur les
+  routes, conflits visibles.
+- **S4 — Zoom local animé** (V1.0, avec R3) : personnages sur tuiles/voxels, activités
+  (chasse, récolte, construction) tirées de la simulation.
+
 ### Expériences de référence
 
 - **#001** dispersion 120k → 10k BP (en cours). Contrefactuels prévus : #002 mer +20 m,

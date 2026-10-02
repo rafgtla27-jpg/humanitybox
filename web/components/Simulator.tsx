@@ -23,6 +23,7 @@ export default function Simulator() {
   const [layer, setLayer] = useState<Layer>("humans");
   const [menu, setMenu] = useState<Menu>(null);
   const [awake, setAwake] = useState(true);
+  const [perSprite, setPerSprite] = useState<number | null>(null);
   const idle = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   // Chargement de la liste des runs puis du run choisi
@@ -104,7 +105,9 @@ export default function Simulator() {
 
   return (
     <main className="sim" onPointerMove={wake} onPointerDown={wake} onKeyDown={onKey} tabIndex={-1}>
-      {data && !error && <Globe data={data} frame={frame} layer={layer} space className="sim-globe" onError={setError} />}
+      {data && !error && (
+        <Globe data={data} frame={frame} layer={layer} space sprites onSpriteScale={setPerSprite} className="sim-globe" onError={setError} />
+      )}
       {!data && !error && <div className="sim-loading" aria-label="Chargement" />}
       {error && <p className="sim-error" role="alert">{error}</p>}
 
@@ -129,6 +132,9 @@ export default function Simulator() {
                   {l.label}
                 </button>
               ))}
+              {layer === "humans" && perSprite && (
+                <p className="popover-note">1 silhouette ≈ {perSprite.toLocaleString("fr-FR")} personnes. Zoomez pour les voir de près.</p>
+              )}
             </div>
           )}
           {menu === "runs" && (

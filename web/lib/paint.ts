@@ -66,7 +66,15 @@ const LUTS = Object.fromEntries(Object.entries(RAMPS).map(([k, v]) => [k, buildL
 export type RunData = { manifest: Manifest; frames: Uint8Array; climate: Uint8Array | null; extra: Uint8Array | null };
 
 /** Peint la frame dans `out` (RGBA, nx * nRows pixels) à partir de la ligne `row0` de la grille. */
-export function paintFrame(data: RunData, frame: number, layer: Layer, out: Uint8ClampedArray, row0 = 0, nRows?: number) {
+export function paintFrame(
+  data: RunData,
+  frame: number,
+  layer: Layer,
+  out: Uint8ClampedArray,
+  row0 = 0,
+  nRows?: number,
+  opts: { naturalGround?: boolean } = {},
+) {
   const { ny, nx } = data.manifest.grid;
   const rows = nRows ?? ny;
   const plane = ny * nx;
@@ -87,6 +95,10 @@ export function paintFrame(data: RunData, frame: number, layer: Layer, out: Uint
   };
   if (layer === "cold") clim = extraPlane("cold");
   const rivers = extraPlane("rivers");
+  // Sol « naturel » (végétation atténuée) sous les humains quand les silhouettes portent la population
+  const natural = opts.naturalGround && layer === "humans" && data.climate
+    ? data.climate.subarray(off + 2 * plane, off + 3 * plane) : null;
+  const nppLut = LUTS.npp;
   const lut = layer !== "humans" ? LUTS[layer] : null;
 
   const { density_lo: lo, density_hi: hi } = data.manifest.frames;
@@ -110,6 +122,12 @@ export function paintFrame(data: RunData, frame: number, layer: Layer, out: Uint
         } else [R, G, B] = layer === "cold" ? [92, 85, 74] : COLORS.land;
       } else {
         [R, G, B] = COLORS.land;
+        if (natural && natural[i]) {
+          const q = natural[i];
+          R = nppLut[q * 3] * 0.72;
+          G = nppLut[q * 3 + 1] * 0.72;
+          B = nppLut[q * 3 + 2] * 0.72;
+        }
         const ds = deq(sap[i]);
         const da = deq(arc[i]);
         const tot = ds + da;
@@ -117,7 +135,7 @@ export function paintFrame(data: RunData, frame: number, layer: Layer, out: Uint
           // Teinte = qui domine localement ; opacité = densité totale
           const share = ds / tot;
           const qTot = Math.min(255, 1 + Math.max(0, Math.round((254 * (Math.log10(tot) - llo)) / span)));
-          const a = 0.25 + 0.7 * (qTot / 255);
+          const a = natural ? 0.3 + 0.55 * (qTot / 255) : 0.25 + 0.7 * (qTot / 255);
           const tr = COLORS.archaic[0] + share * (COLORS.sapiens[0] - COLORS.archaic[0]);
           const tg = COLORS.archaic[1] + share * (COLORS.sapiens[1] - COLORS.archaic[1]);
           const tb = COLORS.archaic[2] + share * (COLORS.sapiens[2] - COLORS.archaic[2]);

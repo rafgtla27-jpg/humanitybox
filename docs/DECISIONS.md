@@ -111,3 +111,10 @@ lieu de faire planter toute la page. Les runs de démo sont désormais les vrais
 
 Viewer : rivières dessinées sur tous les calques (seuil d'affichage ~500 m³/s), calque
 « Adaptation au froid », run d'aperçu « A — aperçu moteur 0.3 » en démo.
+
+**Viewer 0.3.2 — sprites, étape S1.** Les silhouettes représentent fidèlement les densités
+simulées (une silhouette = S personnes, S ∈ {25, 50, … 10 000}, au plus 30 000), à positions
+stables par cellule pour que la croissance et le déclin se voient comme des apparitions et des
+disparitions. Le petit mouvement sur place est décoratif et le restera tant qu'il n'y a pas
+d'agents (S3, V0.7–V0.8). Sous les humains, le sol montre la végétation (NPP atténuée) et la
+densité devient un voile ocre : en vue d'ensemble on lit la dispersion, de près on voit les gens.

@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+import { Bands } from "@/lib/bands";
 import { paintFrame, type Layer, type RunData } from "@/lib/paint";
 
 type Props = {
@@ -13,6 +14,9 @@ type Props = {
   space?: boolean;
   className?: string;
   onError?: (message: string) => void;
+  /** Silhouettes de groupes humains (calque Humains uniquement) */
+  sprites?: boolean;
+  onSpriteScale?: (peoplePerSprite: number) => void;
 };
 
 /** Champ d'étoiles fixe (générateur pseudo-aléatoire déterministe). */
@@ -48,9 +52,11 @@ function directionFor(lonDeg: number, latDeg: number) {
   return new THREE.Vector3(Math.cos(lat) * Math.cos(lon), Math.sin(lat), -Math.cos(lat) * Math.sin(lon));
 }
 
-export default function Globe({ data, frame, layer, space = false, className = "globe", onError }: Props) {
+export default function Globe({ data, frame, layer, space = false, className = "globe", onError, sprites = false, onSpriteScale }: Props) {
   const mountRef = useRef<HTMLDivElement>(null);
-  const paintRef = useRef<{ canvas: HTMLCanvasElement; texture: THREE.CanvasTexture; render: () => void } | null>(null);
+  const paintRef = useRef<{ canvas: HTMLCanvasElement; texture: THREE.CanvasTexture; render: () => void; bands: Bands | null } | null>(null);
+  const showBands = useRef(layer === "humans");
+  showBands.current = layer === "humans";
 
   // Scène créée une fois par run
   useEffect(() => {
@@ -117,6 +123,11 @@ export default function Globe({ data, frame, layer, space = false, className = "
     );
     scene.add(atmosphere);
 
+    const bands = sprites ? new Bands(renderer.getPixelRatio()) : null;
+    if (bands) scene.add(bands.points);
+    const animate = !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const clock = new THREE.Clock();
+
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.08;
@@ -132,6 +143,7 @@ export default function Globe({ data, frame, layer, space = false, className = "
       // Rotation plus lente quand on est proche de la surface
       controls.rotateSpeed = 0.15 + 0.35 * Math.min(1, (camera.position.length() - 1) / 2.5);
       controls.update();
+      bands?.tick(clock.getElapsedTime(), camera.position.length(), showBands.current, animate);
       render();
     };
     loop();
@@ -160,7 +172,7 @@ export default function Globe({ data, frame, layer, space = false, className = "
     ro.observe(mount);
     resize();
 
-    paintRef.current = { canvas, texture, render };
+    paintRef.current = { canvas, texture, render, bands };
 
     return () => {
       cancelAnimationFrame(raf);
@@ -169,6 +181,7 @@ export default function Globe({ data, frame, layer, space = false, className = "
       texture.dispose();
       globe.geometry.dispose();
       (globe.material as THREE.Material).dispose();
+      bands?.dispose();
       atmosphere.geometry.dispose();
       if (stars) {
         stars.geometry.dispose();
@@ -180,7 +193,7 @@ export default function Globe({ data, frame, layer, space = false, className = "
       paintRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data, space]);
+  }, [data, space, sprites]);
 
   // Mise à jour de la texture quand la frame ou le calque change
   useEffect(() => {
@@ -189,9 +202,11 @@ export default function Globe({ data, frame, layer, space = false, className = "
     const { nx, ny } = data.manifest.grid;
     const ctx = p.canvas.getContext("2d")!;
     const img = ctx.createImageData(nx, ny);
-    paintFrame(data, frame, layer, img.data);
+    paintFrame(data, frame, layer, img.data, 0, undefined, { naturalGround: !!p.bands });
     ctx.putImageData(img, 0, 0);
     p.texture.needsUpdate = true;
+    if (p.bands) onSpriteScale?.(p.bands.update(data, frame));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data, frame, layer]);
 
   return (

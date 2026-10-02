@@ -185,3 +185,4 @@ button { font: inherit; color: inherit; }
   .hud-bottom { gap: 6px 10px; }
 }
 @media (prefers-reduced-motion: reduce) { .hud, .sim-loading { transition: none; animation: none; } }
+.popover-note { margin: 6px 6px 4px; padding-top: 8px; border-top: 1px solid rgba(255, 255, 255, 0.08); font-size: 0.78rem; color: #8d8d88; max-width: 26ch; }
