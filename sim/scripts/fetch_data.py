@@ -6,6 +6,7 @@ Télécharge les données d'entrée dans sim/data/.
 """
 import argparse
 import io
+import time
 import shutil
 import sys
 import urllib.request
@@ -20,12 +21,27 @@ DATA = Path(os.environ.get("WORLDSIM_DATA") or Path(__file__).resolve().parent.p
 WANTED = {"etopo10_ice_g_i2.bin", "etopo10_ice_g_i2.hdr", "LICENSE"}
 
 
+def download(url: str, timeout: int = 120, tries: int = 5) -> bytes:
+    """Téléchargement avec nouvelles tentatives (connexion Wi-Fi instable, DNS capricieux)."""
+    for k in range(1, tries + 1):
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "worldsim-fetch/0.1"})
+            return urllib.request.urlopen(req, timeout=timeout).read()
+        except OSError as e:
+            if k == tries:
+                raise SystemExit(f"Échec du téléchargement après {tries} essais : {url}\n{e}\n"
+                                 "Vérifie la connexion Internet de cet ordinateur, ou ajoute les "
+                                 "fichiers de données dans sim/data (voir docs/DECISIONS.md).")
+            print(f"  essai {k} raté ({e}), nouvelle tentative dans {5 * k} s", flush=True)
+            time.sleep(5 * k)
+
+
 def etopo():
     if (DATA / "etopo10_ice_g_i2.bin").exists():
         print("ETOPO déjà présent")
         return
     print("téléchargement", ETOPO_URL)
-    raw = urllib.request.urlopen(ETOPO_URL, timeout=120).read()
+    raw = download(ETOPO_URL)
     with zipfile.ZipFile(io.BytesIO(raw)) as z:
         for name in z.namelist():
             base = name.split("/")[-1]

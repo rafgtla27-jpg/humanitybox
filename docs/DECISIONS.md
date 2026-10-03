@@ -378,3 +378,8 @@ Choix : runner auto-hébergé sur l'ordinateur de l'utilisateur (gratuit, dépô
 workflow `calibrate-local` (runs-on: self-hosted, commandes compatibles Windows/macOS/Linux) ;
 données conservées hors du dépôt (`WORLDSIM_DATA`). Sécurité : garder le dépôt privé tant qu'un
 runner personnel y est attaché.
+Runner Windows : la résolution DNS a échoué au téléchargement d'ETOPO (réseau instable), alors que
+pip venait de fonctionner. Pour ne plus dépendre du réseau pendant les calculs, les données d'entrée
+sont désormais stockées dans le dépôt privé (`sim/data` : relief ETOPO 10′, 4,7 Mo ; climat Beyer
+compact à 1°, 10,9 Mo). La calibration locale utilise donc la version compacte du climat (précision
+float16, différences négligeables avec le netCDF). `fetch_data.py` réessaie 5 fois en cas d'échec.
