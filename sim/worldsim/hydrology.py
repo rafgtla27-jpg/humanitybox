@@ -102,6 +102,11 @@ class Hydrology:
         return q.reshape(self.grid.ny, self.grid.nx)
 
     @staticmethod
+    def river_access(q_m3s) -> np.ndarray:
+        """0 sous Q_MIN, 1 au-dessus de Q_FULL (échelle logarithmique)."""
+        return np.clip(np.log10(np.maximum(q_m3s, 1e-9) / Q_MIN) / np.log10(Q_FULL / Q_MIN), 0, 1)
+
+    @staticmethod
     def water_availability(p_mm, temperature_c, q_m3s) -> np.ndarray:
         ai = np.maximum(p_mm, 0) / pet_mm(temperature_c)
         rain = np.clip((ai - AI_HYPERARID) / (AI_ARID - AI_HYPERARID), 0, 1)

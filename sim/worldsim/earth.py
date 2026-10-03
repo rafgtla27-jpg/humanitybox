@@ -78,6 +78,23 @@ def monsoon_index(year: int) -> float:
 # ----------------------------------------------------------------------------
 # Topographie réelle
 # ----------------------------------------------------------------------------
+# Détroits jamais émergés sur 120 000 ans (seuil plus profond que le plus bas niveau marin, −130 m),
+# trop étroits pour être résolus à 1° ou même à 10'. Données bathymétriques, pas réglage.
+# Chaque détroit = deux ensembles de cellules (lat, lon des centres) ; tout lien direct entre eux
+# devient une traversée maritime.
+STRAITS = {
+    # seuil de Camarinal ≈ −284 m
+    "Gibraltar": ([(35.5, lo) for lo in (-8.5, -7.5, -6.5, -5.5, -4.5, -3.5, -2.5, -1.5)],
+                  [(36.5, lo) for lo in (-8.5, -7.5, -6.5, -5.5, -4.5, -3.5, -2.5, -1.5)]),
+    # seuil de Hanish ≈ −137 m
+    "Bab-el-Mandeb": ([(la, lo) for la in (11.5, 12.5, 13.5, 14.5, 15.5, 16.5) for lo in (41.5, 42.5)] + [(11.5, 43.5), (10.5, 43.5)],
+                      [(la, lo) for la in (12.5, 13.5, 14.5, 15.5, 16.5) for lo in (43.5, 44.5)]),
+    # canal de Sicile ≈ −300 m et plus
+    "Sicile": ([(la, lo) for la in (35.5, 36.5, 37.5) for lo in (8.5, 9.5, 10.5, 11.5)] + [(35.5, 12.5), (36.5, 12.5)],
+               [(la, lo) for la in (37.5, 38.5) for lo in (12.5, 13.5, 14.5, 15.5)]),
+}
+
+
 class Topography:
     """ETOPO 10' agrégé par blocs : la fraction de terre émergée est
     recalculée exactement pour n'importe quel niveau marin."""
@@ -97,6 +114,63 @@ class Topography:
             coast = ndimage.distance_transform_edt(land_frac > 0.5, sampling=(KM_PER_DEG, KM_PER_DEG * 0.75))
             self._cache[key] = (land_frac, elev, rough, coast)
         return self._cache[key]
+
+    def connectivity(self, sl: float) -> dict:
+        """Pour chaque direction (di, dj), un tableau booléen : la cellule (i, j) est-elle reliée à pied
+        à sa voisine (i+di, j+dj) ? Calculé à la résolution 10' : deux cellules de 1° qui ont chacune
+        de la terre ne sont reliées que si des sous-cellules émergées se touchent à leur frontière.
+        Évite les faux ponts de terre (Gibraltar, Bab-el-Mandeb) créés par l'agrégation."""
+        key = ("conn", int(round(sl)))
+        if key in self._cache:
+            return self._cache[key]
+        ny, nx = self.grid.ny, self.grid.nx
+        b = int(round(np.sqrt(self.blocks.shape[2])))
+        land = (self.blocks > sl).reshape(ny, nx, b, b)
+
+        def near(v):  # tolère un décalage d'une sous-cellule (connexité 8)
+            out = v.copy()
+            out[..., 1:] |= v[..., :-1]
+            out[..., :-1] |= v[..., 1:]
+            return out
+
+        east_a = land[:, :, :, b - 1]
+        east_b = np.roll(land[:, :, :, 0], -1, axis=1)
+        E = (east_a & near(east_b)).any(axis=2)
+        south_a = land[:-1, :, b - 1, :]
+        south_b = land[1:, :, 0, :]
+        S = np.zeros((ny, nx), bool)
+        S[:-1] = (south_a & near(south_b)).any(axis=2)
+        SE = np.zeros((ny, nx), bool)
+        SE[:-1] = land[:-1, :, b - 1, b - 1] & np.roll(land[1:, :, 0, 0], -1, axis=1)
+        SW = np.zeros((ny, nx), bool)
+        SW[:-1] = land[:-1, :, b - 1, 0] & np.roll(land[1:, :, 0, b - 1], 1, axis=1)
+
+        def back(a, di, dj):  # relation symétrique vue depuis l'autre cellule
+            out = np.roll(a, dj, axis=1)
+            res = np.zeros_like(out)
+            if di > 0:
+                res[1:] = out[:-1]
+            elif di < 0:
+                res[:-1] = out[1:]
+            else:
+                res = out
+            return res
+
+        conn = {(0, 1): E, (1, 0): S, (1, 1): SE, (1, -1): SW,
+                (0, -1): back(E, 0, 1), (-1, 0): back(S, 1, 0), (-1, -1): back(SE, 1, 1), (-1, 1): back(SW, 1, -1)}
+        conn = {k: v.copy() for k, v in conn.items()}
+        res = self.grid.res
+        idx = lambda la, lo: (int(round((90 - la) / res - 0.5)), int(round((lo + 180) / res - 0.5)) % nx)  # noqa: E731
+        for side_a, side_b in STRAITS.values():
+            A = {idx(*c) for c in side_a}
+            B = {idx(*c) for c in side_b}
+            for (i, j) in A | B:
+                other = B if (i, j) in A else A
+                for (di, dj), arr in conn.items():
+                    if (i + di, (j + dj) % nx) in other:
+                        arr[i, j] = False
+        self._cache[key] = conn
+        return conn
 
     def _compute(self, sl: float):
         above = self.blocks > sl

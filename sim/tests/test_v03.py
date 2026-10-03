@@ -135,3 +135,35 @@ def test_calibration_refuses_to_choose_when_everything_fails(tmp_path):
                                                  "engine_version": "x", "seed": 1, "variant": "v00", "params": {}, "regions": rows}))
     assert report(tmp_path)["chosen"] is None
     assert "rien n'est choisi" in (tmp_path / "calibration.md").read_text()
+
+
+def test_rivers_feed_people_in_a_desert():
+    from worldsim.humans import Ecology
+    s = EARTH.state(0)
+    eco = Ecology(EARTH, GRID, HumanParams())
+    dry = np.zeros_like(s.npp)
+    k_no = eco.carrying_capacity(s, dry, None)
+    k_river = eco.carrying_capacity(s, dry, np.ones_like(dry))
+    land = (s.land_frac > 0.5) & ~s.ice
+    assert (k_river[land] > k_no[land]).all()
+
+
+def test_boats_need_complexity():
+    p = HumanParams(boat_C=0.5)
+    b = Demography.boat_factor(np.array([0.2, 0.5, 0.75, 1.0]), p)
+    assert b[0] == 0 and b[1] == 0 and 0.4 < b[2] < 0.6 and b[3] == 1
+
+
+def test_straits_and_land_bridges():
+    t = EARTH.topo
+
+    def linked(a, b, sl):
+        c = t.connectivity(sl)
+        i, j = int(90 - a[0]), int(a[1] + 180)
+        k, l = int(90 - b[0]), int(b[1] + 180)
+        return bool(c[(k - i, l - j)][i, j])
+    assert not linked((35.5, -5.5), (36.5, -5.5), -120)      # Gibraltar : jamais émergé
+    assert not linked((13.5, 42.5), (13.5, 43.5), -120)      # Bab-el-Mandeb
+    assert linked((65.5, -169.5), (65.5, -168.5), -120)      # Béringie au dernier maximum glaciaire
+    assert not linked((65.5, -169.5), (65.5, -168.5), 0)     # … mais pas aujourd'hui
+    assert linked((50.5, 1.5), (51.5, 1.5), -120)            # Manche à pied au LGM

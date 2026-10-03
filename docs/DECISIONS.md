@@ -235,3 +235,34 @@ Décision de méthode : arrêter les calibrations « à l'aveugle ». Je ne peux
 donc chaque hypothèse coûtait un aller-retour complet. Le workflow `export-climate` produit une
 version compacte du climat (1°, ~20 Mo) ; avec elle, les diagnostics et les vérifications de
 grille se font en local, sur le vrai climat, avant de relancer une calibration.
+
+**Moteur 0.4.3 — premiers diagnostics sur le vrai climat (fichier compact Beyer reçu)**
+Suivi de la population, du réseau social et du répertoire le long du couloir de sortie
+(variante favorable adv 0,4 ; cx_n0 5 000 ; archaic_C 0,15) :
+- Afrique de l'Est ~400 000 personnes, répertoire 0,85 ; vallée du Nil 1 000 à 3 000 personnes
+  seulement ; Sinaï et Levant quasi vides de sapiens ; sud de l'Arabie peuplé dès 110k (~30 000,
+  répertoire ~0,45, entrée par Bab-el-Mandeb).
+Défauts de structure corrigés :
+1. *Fleuves nourriciers* : un grand fleuve apporte une ressource propre (poisson, gibier, plaine
+   d'inondation), indépendante de la végétation de la cellule, comme la côte. Le Nil n'était qu'un
+   filet d'eau dans un désert.
+2. *Mêmes règles pour tous les humains* : le répertoire des archaïques dépend aussi de leur réseau
+   social ; `archaic_C` devient leur plafond (capacité d'apprentissage social).
+3. *Faux ponts de terre* : à 1°, les cellules marocaine et espagnole se touchent, et sapiens entrait
+   en Europe à pied par Gibraltar vers 100k (trajet tracé dans les frames). Les liens à pied entre
+   cellules sont désormais calculés à 10′ ; les trois détroits du couloir de sortie, jamais émergés
+   (Gibraltar ≈ −284 m, Bab-el-Mandeb ≈ −137 m, canal de Sicile ≥ −300 m), sont déclarés bras de mer
+   d'après leur bathymétrie. Testé : Gibraltar fermé ; Béringie et Manche praticables au LGM.
+   Les autres détroits (Wallacea, Corée) relèvent de régions de test : non touchés.
+4. *Embarcations* : traverser un bras de mer exige un répertoire ≥ `boat_C` (0,5).
+Conséquence : sans la porte de Gibraltar, la zone utile des paramètres s'est déplacée. Essais
+locaux (seed 1, jusqu'à 30k) : archaic_C 0,25 → sapiens bloqué au Levant (6 %) ; 0,15–0,2 avec
+cx_n0 3 000–5 000 → entrée au Levant (part max 11–18 %, arrivée 111k ou 58k selon le réglage)
+mais ni Europe ni Asie du Sud. Le couloir aride Levant–Iran, tenu par des archaïques clairsemés,
+reste la barrière. Nouvelle grille plus permissive : adv_max {0,4 ; 0,8} × cx_n0 {1 500 ;
+3 000 ; 5 000} × archaic_C {0,05 ; 0,1 ; 0,15}.
+Question ouverte (entraînement) : l'Asie du Sud n'est atteinte dans aucun essai.
+Vérification de la grille sur le vrai climat (avant de lancer la calibration) : coin le plus
+favorable (adv 0,8 ; cx_n0 1 500 ; archaic_C 0,05) → sortie et expansion trop précoces (Levant 113k,
+Asie du Sud 90k, Europe 102k, Australie 67k) ; côté défavorable → blocage au Levant. La grille
+encadre donc le comportement réel : la calibration peut trouver l'intérieur.

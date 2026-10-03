@@ -56,7 +56,11 @@ def run(seed: int = 1, start: int = -120_000, end: int = -10_000, params: HumanP
         arch = ARCHAIC
         if complexity:
             import dataclasses as _dc
-            arch = _dc.replace(ARCHAIC, adv_max=params.adv_max, C_fixed=ARCHAIC.C_fixed if archaic_C is None else archaic_C)
+            # Mêmes règles pour tous les humains : le répertoire des archaïques dépend aussi de leur
+            # réseau social ; archaic_C est leur plafond (capacité d'apprentissage social).
+            arch = _dc.replace(ARCHAIC, adv_max=params.adv_max, complexity=True, C_fixed=None,
+                               cx_n0=params.cx_n0, cx_span=params.cx_span, net_sigma=params.net_sigma,
+                               cx_ceiling=ARCHAIC.C_fixed if archaic_C is None else archaic_C)
         sim.state["populations"]["A"] = arch
         sim.state["range:A"] = eurasia.astype(np.float32)
         # alpha[(i, j)] = effet de j sur i

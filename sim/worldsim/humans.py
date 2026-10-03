@@ -25,6 +25,8 @@ class HumanParams:
     d_max: float = 0.2          # hab/km² terrestre à NPP de référence (ordre de grandeur Binford)
     npp_ref: float = 1500.0     # g/m²/an
     marine: float = 0.06        # hab/km² supplémentaires sur cellules côtières
+    river: float = 0.06         # hab/km² supplémentaires le long d'un grand fleuve (poisson, gibier, plaine
+                                # d'inondation) : une vallée nourrit même au milieu d'un désert (Nil)
     t_min: float = -12.0        # °C : en dessous, habitat impossible sans technologie
     t_ok: float = 2.0           # °C : au-dessus, pas de pénalité de froid
     m_base: float = 0.0004      # fraction émigrant /an, même sans pression (exploration)
@@ -50,6 +52,9 @@ class HumanParams:
     cx_span: float = 40.0       # C* = 1 atteint pour cx_n0 × cx_span personnes en réseau
     cx_tau_gain: float = 2000.0  # ans : vitesse à laquelle un répertoire s'enrichit
     cx_tau_loss: float = 6000.0  # ans : vitesse d'érosion (on oublie plus lentement qu'on n'apprend)
+    cx_ceiling: float = 1.0     # plafond du répertoire (archaïques : capacité d'apprentissage social moindre)
+    boat_C: float = 0.5         # complexité à partir de laquelle on sait traverser un bras de mer
+                                # (embarcations = technique complexe) ; sans complexité : pas de limite
     adv_max: float = 0.3        # avantage compétitif pour un écart de complexité de 1
     net_sigma: float = 3.0      # portée du réseau social (cellules, noyau gaussien σ ≈ 330 km)
     # --- V0.3 : contingence explicite
@@ -89,35 +94,40 @@ class Ecology:
 
     def __init__(self, earth: EarthProvider, grid: Grid, params: HumanParams, period: int = 250):
         self.earth, self.grid, self.p, self.period = earth, grid, params, period
+        from .earth import Topography
+        self.topo = getattr(earth, "topo", None) or Topography(grid)
         self.hydro = None
         if params.water:
-            from .earth import Topography
             from .hydrology import Hydrology
-            self.hydro = Hydrology(grid, getattr(earth, "topo", None) or Topography(grid))
+            self.hydro = Hydrology(grid, self.topo)
 
-    def carrying_capacity(self, s, water: np.ndarray | None = None) -> np.ndarray:
+    def carrying_capacity(self, s, water: np.ndarray | None = None, river: np.ndarray | None = None) -> np.ndarray:
         p, g = self.p, self.grid
         land_area = g.cell_area_km2 * s.land_frac
         w = np.ones_like(s.npp) if water is None else water
         dens = p.d_max * np.minimum(s.npp / p.npp_ref, 1.3) * w
         coastal = (s.land_frac > 0.02) & (s.land_frac < 0.98)
         marine = np.where(coastal, p.marine * g.cell_area_km2 * 0.3 * np.maximum(w, p.marine_water_floor), 0)
-        k = dens * land_area + marine
+        riverine = 0 if river is None else p.river * g.cell_area_km2 * 0.3 * river
+        k = dens * land_area + marine + riverine
         return np.where(s.ice | (s.land_frac <= 0.02), 0.0, k)
 
     def step(self, sim: Simulation, year: int, dt: int) -> None:
         s = self.earth.state(year)
         water = None
+        river = None
         if self.hydro is not None:
             q = self.hydro.discharge_m3s(s.precipitation, s.temperature, s.land_frac > 0.3)
             water = self.hydro.water_availability(s.precipitation, s.temperature, q)
+            river = self.hydro.river_access(q)
             sim.state["discharge"] = q.astype(np.float32)
             sim.state["water"] = water.astype(np.float32)
-        k = self.carrying_capacity(s, water)
+        k = self.carrying_capacity(s, water, river)
         noise = sim.rng.get("ecology").lognormal(0, self.p.k_noise, k.shape)
         sim.state["earth"] = s
         sim.state["K"] = (k * noise).astype(np.float32)
         sim.state["passable"] = (s.land_frac > 0.02) & ~s.ice
+        sim.state["conn"] = self.topo.connectivity(s.sea_level)  # liens à pied entre cellules voisines
         sim.state["rough_cost"] = np.exp(-s.roughness / self.p.rough_scale).astype(np.float32)
 
 
@@ -157,20 +167,31 @@ class Demography:
             passable = sim.state["passable"]
             water_pad = self._pad(~passable)
             self._coef = []
+            conn = sim.state.get("conn")
+            # 1. Pas à pied, seulement si la terre est continue (sinon c'est un bras de mer)
             for di, dj, w in ADJ:
-                self._coef.append((di, dj, np.float32(w)))
+                link = np.float32(1) if conn is None else conn[(di, dj)].astype(np.float32)
+                self._coef.append((di, dj, np.float32(w) * link))
+            # 2. Bras de mer entre cellules voisines (détroits) : traversée, donc embarcation
+            for di, dj, w in ADJ:
+                strait = np.float32(0) if conn is None else (~conn[(di, dj)]).astype(np.float32)
+                self._coef.append((di, dj, np.float32(w * self.p.p_sea) * strait))
+            # 3. Sauts d'une cellule d'eau
             for di, dj, w in HOPS:
                 mid = self._view(water_pad, di // 2, dj // 2, passable.shape)
                 self._coef.append((di, dj, (w * self.p.p_sea * mid).astype(np.float32)))
             self._static_key = key
         return self._coef
 
-    def migrate(self, N: np.ndarray, room: np.ndarray, out_rate: np.ndarray, coefs, carried=()):
+    def migrate(self, N: np.ndarray, room: np.ndarray, out_rate: np.ndarray, coefs, carried=(), hop_scale=None):
         """Déplace N et, avec exactement les mêmes flux relatifs, les quantités `carried`
         (ex. N × trait culturel). Renvoie N seul si carried est vide, sinon (N, [carried…])."""
         shape = N.shape
         room_pad = self._pad(room)
         weights = [self._view(room_pad, di, dj, shape) * c for di, dj, c in coefs]
+        if hop_scale is not None:  # traversées maritimes possibles selon la source (embarcations)
+            for k in range(len(ADJ), len(weights)):
+                weights[k] = weights[k] * hop_scale
         W = weights[0].copy()
         for w in weights[1:]:
             W += w
@@ -192,7 +213,12 @@ class Demography:
             return move(N)
         return move(N), [move(X) for X in carried]
 
-    def _long_jumps(self, sim, N, K, p, dt, rng, c):
+    @staticmethod
+    def boat_factor(C, p) -> np.ndarray:
+        """0 sous boat_C, 1 pour un répertoire complet : traverser la mer exige des embarcations."""
+        return np.clip((np.asarray(C) - p.boat_C) / max(1e-6, 1 - p.boat_C), 0, 1).astype(np.float32)
+
+    def _long_jumps(self, sim, N, K, p, dt, rng, c, boats=None):
         """Sauts de groupes pionniers. Renvoie (N, c) mis à jour et journalise les fondations."""
         pressure = np.where(K > 0, np.clip(N / np.maximum(K, 1e-9), 0, 1), 0)
         prob = p.ldd_rate * dt * pressure * (N > 4 * p.ldd_founders)
@@ -215,12 +241,20 @@ class Demography:
             tj = int(round(j + dj * dist)) % nx
             # Le trajet doit rester terrestre (une seule cellule d'eau tolérée)
             wet = 0
-            for k in range(1, dist):
+            conn = sim.state.get("conn")
+            pi, pj = i, j
+            for k in range(1, dist + 1):
                 ii = int(round(i + di * k))
                 jj = int(round(j + dj * k)) % nx
-                if not passable[ii, jj]:
+                if k < dist and not passable[ii, jj]:
                     wet += 1
+                step = (ii - pi, ((jj - pj + nx // 2) % nx) - nx // 2)
+                if conn is not None and step != (0, 0) and step in conn and not conn[step][pi, pj]:
+                    wet += 1  # détroit franchi
+                pi, pj = ii, jj
             dst = ti * nx + tj
+            if wet and boats is not None and rng.random() >= boats.ravel()[src]:
+                continue  # bras de mer sans embarcation
             if wet > 1 or not passable[ti, tj] or Kf[dst] <= 0 or Nf[dst] >= 0.5 * Kf[dst]:
                 continue
             f = min(p.ldd_founders, Nf[src] * 0.25)
@@ -307,17 +341,19 @@ class Demography:
                 pressure = np.where(K > 0, np.clip(load / Ksafe, 0, 3), 3)
                 out_rate = np.clip((p.m_base + p.m_press * pressure) * dt, 0, 0.5).astype(np.float32)
                 hop_coefs = coefs if p.p_sea > 0 else coefs[:len(ADJ)]
+                cx_now = sim.state.get(f"complexity:{name}") if p.complexity and p.C_fixed is None else None
+                boats = None if cx_now is None else self.boat_factor(cx_now, p)
                 cx = sim.state.get(f"complexity:{name}") if p.complexity and p.C_fixed is None else None
                 carried = ([N * c] if dynamic else []) + ([N * cx] if cx is not None else [])
                 if carried:
-                    N, moved = self.migrate(N, room, out_rate, hop_coefs, carried=tuple(carried))
+                    N, moved = self.migrate(N, room, out_rate, hop_coefs, carried=tuple(carried), hop_scale=boats)
                     safe = np.maximum(N, 1e-9)
                     if dynamic:
                         c = np.where(N > 1e-9, np.clip(moved.pop(0) / safe, 0, 1), 0)
                     if cx is not None:
                         sim.state[f"complexity:{name}"] = np.where(N > 1e-9, np.clip(moved.pop(0) / safe, 0, 1), 0).astype(np.float32)
                 else:
-                    N = self.migrate(N, room, out_rate, hop_coefs)
+                    N = self.migrate(N, room, out_rate, hop_coefs, hop_scale=boats)
 
             # 3. Contingence
             # 3a. Bruit démographique : naissances et décès sont des événements discrets ;
@@ -328,10 +364,12 @@ class Demography:
             # 3b. Dispersion lointaine : de rares groupes pionniers partent loin devant le front.
             #     C'est ce qui rend chaque histoire différente : où et quand ils partent, s'ils survivent.
             if p.ldd_rate > 0 and (p.m_base > 0 or p.m_press > 0):
+                cxj = sim.state.get(f"complexity:{name}") if p.complexity and p.C_fixed is None else None
+                bj = None if cxj is None else self.boat_factor(cxj, p)
                 if dynamic:
-                    N, c = self._long_jumps(sim, N, K, p, dt, rng, c)
+                    N, c = self._long_jumps(sim, N, K, p, dt, rng, c, bj)
                 else:
-                    N, _ = self._long_jumps(sim, N, K, p, dt, rng, None)
+                    N, _ = self._long_jumps(sim, N, K, p, dt, rng, None, bj)
 
             # 3c. Les petits groupes peuvent disparaître
             small = (N > 0) & (N < p.allee_n)
@@ -346,7 +384,7 @@ class Demography:
                 # Le répertoire culturel tend vers un équilibre fixé par la taille du réseau social :
                 # grand réseau → techniques complexes maintenues ; petit réseau → érosion.
                 C = sim.state.get(f"complexity:{name}")
-                target = np.clip(np.log(np.maximum(n_net, 1) / p.cx_n0) / np.log(p.cx_span), 0, 1)
+                target = p.cx_ceiling * np.clip(np.log(np.maximum(n_net, 1) / p.cx_n0) / np.log(p.cx_span), 0, 1)
                 if C is None:
                     C = target
                 tau = np.where(target > C, p.cx_tau_gain, p.cx_tau_loss)

@@ -28,10 +28,13 @@ from pathlib import Path
 from .ensemble import load_manifests, score, summarize
 
 SCENARIO = "C"
+# Grille v0.4.3, choisie après essais en local sur le vrai climat (Beyer) avec la géographie
+# corrigée : à archaic_C ≥ 0,25 sapiens ne sort plus d'Afrique ; à 0,15–0,2 avec cx_n0 3 000–5 000
+# il entre au Levant (part max 11–18 %) sans aller plus loin. La zone utile est donc plus bas.
 GRID = {
-    "adv_max": [0.2, 0.4],
-    "cx_n0": [5000.0, 20000.0, 80000.0],
-    "archaic_C": [0.15, 0.35, 0.55],
+    "adv_max": [0.4, 0.8],
+    "cx_n0": [1500.0, 3000.0, 5000.0],
+    "archaic_C": [0.05, 0.1, 0.15],
 }
 # Entraînement : régions aux dates les mieux établies et directement concernées par les paramètres
 TRAIN = ["Levant", "Europe", "Asie du Sud", "Arctique sibérien"]

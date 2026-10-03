@@ -120,7 +120,7 @@ planètes procédurales plutôt que simulé en continu.
 | Mécanique céleste : lune, marées, éclipses (interprétées si capacité d'abstraction) | V0.8 (éclipses → croyances), V2 | — |
 | Impacts météoritiques, fer météoritique | V2 | — |
 | Atmosphère dynamique (ouragans, moussons, ENSO émergents) | V2 (données en V0–V1) | indice de mousson provisoire |
-| Cycle hydrologique complet (évapotranspiration, nappes, fonte, méandres) | V0.3 (rivières), V0.6, V2 | rivières émergentes + Budyko ✅ |
+| Cycle hydrologique complet (évapotranspiration, nappes, fonte, méandres) | V0.3 (rivières), V0.6, V2 | rivières émergentes + Budyko ✅, ressources fluviales ✅ (0.4.3) |
 | Cycle du carbone ; dérèglement par énergie fossile | V1.0 | — |
 | Cycles de Milankovitch, glaciations, ponts terrestres | V0.1 (données) / V2 (gén.) | ✅ via niveau marin |
 | Niveau marin dynamique (glace ↑ mer ↓, dilatation) | V0.1 | ✅ |
@@ -179,7 +179,7 @@ planètes procédurales plutôt que simulé en continu.
 | Stockage (production → stock → consommation future) | V0.6 | — |
 | Surplus et division du travail | V0.6 | — |
 | Économie avant l'argent : réciprocité → troc → monnaie-marchandise → crédit, prix, marchés, banques | V0.7 | — |
-| Transport : coût dépendant de la technologie (pied, cheval, bateau) → routes, cols, ports, villes | V0.7 | coût du relief ✅ |
+| Transport : coût dépendant de la technologie (pied, cheval, bateau) → routes, cols, ports, villes | V0.7 | coût du relief ✅, embarcations liées au répertoire ✅ (0.4.3) |
 | Réseaux commerciaux physiques (masse, volume, valeur, périssabilité, danger) | V0.7 | — |
 | Moteur social : parenté, dette, confiance | V0.6 | — |
 | Institutions comme technologies sociales (propriété, contrats, justice, armée, impôt, succession) | V0.8 | — |
