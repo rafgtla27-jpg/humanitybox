@@ -20,7 +20,11 @@ from typing import Protocol
 import numpy as np
 from scipy import ndimage
 
-DATA = Path(__file__).resolve().parent.parent / "data"
+import os
+
+# Dossier des données d'entrée ; WORLDSIM_DATA permet de le placer hors du dépôt (machine perso,
+# où il doit survivre au nettoyage du dépôt entre deux runs).
+DATA = Path(os.environ.get("WORLDSIM_DATA") or Path(__file__).resolve().parent.parent / "data")
 KM_PER_DEG = 111.2
 
 

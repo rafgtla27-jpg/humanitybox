@@ -14,7 +14,9 @@ from pathlib import Path
 
 ETOPO_URL = "https://github.com/g2e/etopo10/archive/refs/heads/master.zip"
 BEYER_URL = "https://zenodo.org/record/7388091/files/Beyer2020_annual_vars_v1.2.2.nc?download=1"
-DATA = Path(__file__).resolve().parent.parent / "data"
+import os
+
+DATA = Path(os.environ.get("WORLDSIM_DATA") or Path(__file__).resolve().parent.parent / "data")
 WANTED = {"etopo10_ice_g_i2.bin", "etopo10_ice_g_i2.hdr", "LICENSE"}
 
 

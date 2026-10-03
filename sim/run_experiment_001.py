@@ -42,7 +42,11 @@ def main():
     ap.add_argument("--set", action="append", default=[], metavar="CLÉ=VALEUR",
                     help="surcharge un paramètre (ex. cold_ncrit=500, advantage=0.05) — calibration")
     ap.add_argument("--variant", default="", help="nom de la variante (calibration), stocké dans le manifest")
+    ap.add_argument("--end", type=int, default=-10_000, help="fin de la simulation (années, négatif) — tests rapides")
+    ap.add_argument("--out", default="outputs", help="dossier de sortie")
     a = ap.parse_args()
+    global OUT
+    OUT = Path(a.out)
 
     if a.summary:
         return summary()
@@ -76,14 +80,14 @@ def main():
     seeds = [int(s) for s in a.seeds.split(",")]
     for i, seed in enumerate(seeds):
         t = time.time()
-        r = run(seed=seed, grid=grid, earth=earth, snapshot_every=2000 if i == 0 and not a.no_frames else None, params=params, **kw)
+        r = run(seed=seed, grid=grid, earth=earth, end=a.end, snapshot_every=2000 if i == 0 and not a.no_frames else None, params=params, **kw)
         print(f"[{a.scenario}] {label} seed={seed}  {time.time() - t:.0f}s")
         out = OUT / (f"{a.scenario}_{a.climate}_{a.variant}_seed{seed}" if a.variant else f"{a.scenario}_{a.climate}_seed{seed}")
         meta = {
             "experiment_id": EXPERIMENT, "scenario": a.scenario, "label": label, "seed": seed,
             "params": {**dataclasses.asdict(params), **kw}, "climate_provider": earth.name,
             "variant": a.variant,
-            "start_year": -120_000, "end_year": -10_000,
+            "start_year": -120_000, "end_year": a.end,
         }
         manifest = export_run(r, grid, out, meta)
         if a.gif and i == 0:

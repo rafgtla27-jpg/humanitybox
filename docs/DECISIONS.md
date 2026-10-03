@@ -371,3 +371,10 @@ la validation finale.
 affiche la population finale (11,7 millions, au-dessus de la fourchette 1–10 millions). Ce diagnostic
 existait avant le pré-enregistrement. On l'a donc vu pour UN monde ; les critères restent inchangés
 et ne serviront à aucun réglage.
+
+**Calcul sur machine personnelle (0.4.7)** — quota GitHub Actions épuisé (dépôt privé, 2 000 min/mois).
+Choix : runner auto-hébergé sur l'ordinateur de l'utilisateur (gratuit, dépôt reste privé).
+`scripts/calibrate_local.py` exécute la même calibration v2 en parallèle sur les cœurs de la machine ;
+workflow `calibrate-local` (runs-on: self-hosted, commandes compatibles Windows/macOS/Linux) ;
+données conservées hors du dépôt (`WORLDSIM_DATA`). Sécurité : garder le dépôt privé tant qu'un
+runner personnel y est attaché.
