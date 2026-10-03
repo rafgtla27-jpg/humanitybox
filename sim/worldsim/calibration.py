@@ -28,13 +28,16 @@ from pathlib import Path
 from .ensemble import load_manifests, score, summarize
 
 SCENARIO = "C"
-# Grille v0.4.3, choisie après essais en local sur le vrai climat (Beyer) avec la géographie
-# corrigée : à archaic_C ≥ 0,25 sapiens ne sort plus d'Afrique ; à 0,15–0,2 avec cx_n0 3 000–5 000
-# il entre au Levant (part max 11–18 %) sans aller plus loin. La zone utile est donc plus bas.
+# Grille v0.4.4. La calibration 0.4.3 a donné entraînement 50 % / test 40 % (v00 : adv 0,4 ;
+# cx_n0 1 500), mais deux défauts ont été trouvés ensuite sur le vrai climat : traversée de
+# Gibraltar en bateau dès que le répertoire dépasse 0,5 (Europe 93k) et cellules vides jugées
+# avec une culture nulle (Arctique inaccessible). Corrigés, ils accélèrent l'expansion : on
+# recalibre, avec le seuil des embarcations parmi les paramètres. archaic_C est fixé à 0,1
+# (sans effet mesurable à cx_n0 = 1 500 dans la calibration 0.4.3).
 GRID = {
-    "adv_max": [0.4, 0.8],
-    "cx_n0": [1500.0, 3000.0, 5000.0],
-    "archaic_C": [0.05, 0.1, 0.15],
+    "adv_max": [0.3, 0.5],
+    "cx_n0": [1500.0, 3000.0, 6000.0],
+    "boat_C": [0.6, 0.75, 0.9],
 }
 # Entraînement : régions aux dates les mieux établies et directement concernées par les paramètres
 TRAIN = ["Levant", "Europe", "Asie du Sud", "Arctique sibérien"]

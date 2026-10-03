@@ -167,3 +167,17 @@ def test_straits_and_land_bridges():
     assert linked((65.5, -169.5), (65.5, -168.5), -120)      # Béringie au dernier maximum glaciaire
     assert not linked((65.5, -169.5), (65.5, -168.5), 0)     # … mais pas aujourd'hui
     assert linked((50.5, 1.5), (51.5, 1.5), -120)            # Manche à pied au LGM
+
+
+def test_empty_cell_judged_with_newcomers_culture():
+    """Régression 0.4.4 : une cellule vide voisine de gens adaptés au froid doit leur paraître habitable."""
+    from worldsim.kernel import Simulation
+    shape = (GRID.ny, GRID.nx)
+    sim = Simulation(-1000, 0, 10, 1)
+    N = np.zeros(shape, np.float32)
+    c = np.zeros(shape, np.float32)
+    N[20, 100] = 500
+    c[20, 100] = 0.95
+    sim.state["N"], sim.state["culture:N"] = N, c
+    ce = Demography(HumanParams()).carried_trait(sim, "N", "culture", 3.0)
+    assert ce[20, 101] > 0.9 and ce[20, 100] > 0.9 and ce[100, 100] == 0

@@ -25,7 +25,7 @@ OUT = Path("outputs")
 SCENARIOS = {
     "A": ("Monde vide", dict(archaics=False)),
     "B": ("Eurasie habitée (α 0.9 / 1.1)", dict(archaics=True, alpha_sa=0.9, alpha_as=1.1)),
-    "C": ("Eurasie habitée, avantage culturel émergent", dict(archaics=True, complexity=True)),
+    "C": ("Eurasie habitée, avantage culturel émergent", dict(archaics=True, complexity=True, archaic_C=0.1)),
 }
 
 

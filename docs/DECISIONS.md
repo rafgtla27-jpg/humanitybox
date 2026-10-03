@@ -266,3 +266,32 @@ Vérification de la grille sur le vrai climat (avant de lancer la calibration) :
 favorable (adv 0,8 ; cx_n0 1 500 ; archaic_C 0,05) → sortie et expansion trop précoces (Levant 113k,
 Asie du Sud 90k, Europe 102k, Australie 67k) ; côté défavorable → blocage au Levant. La grille
 encadre donc le comportement réel : la calibration peut trouver l'intérieur.
+
+**Calibration C 0.4.3 : premier vrai résultat — entraînement 50 %, test 40 %**
+Variante v00 (adv 0,4 ; cx_n0 1 500) sur 6 mondes : Levant 100 % (110k), Asie du Sud 100 % (56,8k),
+et en TEST, jamais utilisées pour choisir : Chine du Sud 100 % (48,2k), Japon 83 % (39,2k),
+Australie 17 % (32k). Premier signe que le modèle généralise au lieu d'apprendre par cœur.
+Restent hors fourchette : Europe (91,5k, trop tôt), Arctique (jamais), Amériques (jamais).
+Rejouée en local sur le vrai climat, v00 révèle deux défauts :
+1. *Europe par la mer* : les sapiens du Maghreb (répertoire 0,56) franchissent Gibraltar et le
+   canal de Sicile en bateau vers 100k, dès que le répertoire dépasse `boat_C` = 0,5 ; l'Anatolie
+   et les Balkans ne sont atteintes que vers 80k. Aucun indice archéologique d'une telle traversée
+   précoce : le seuil des embarcations devient un paramètre calibré.
+2. **Bug** : une cellule vide était évaluée avec la culture de ses occupants, c'est-à-dire de
+   personne (trait = 0). Pour des arrivants parfaitement adaptés au froid, une cellule arctique
+   vide paraissait inhabitable (capacité × facteur de froid à culture nulle = 0) ; de même, en
+   territoire archaïque, une cellule vide comptait comme « répertoire 0 » face aux Néandertaliens.
+   Corrigé : on évalue une cellule avec le trait que porteraient les arrivants (max du local et de
+   la moyenne du réseau voisin). Test de non-régression ajouté.
+Aussi : le risque d'extinction des petits groupes dépend du réseau (≈ 150 personnes) et non de la
+cellule, dont la surface fond aux hautes latitudes.
+Essai local après corrections (v00 + boat_C 0,7, seed 1) : Levant 114k, Asie du Sud 73,5k, Chine
+65k, Australie 48,5k, Japon 65k, Arctique 74k (atteint pour la première fois, trop tôt), Europe
+90,5k (encore trop tôt), Amériques jamais. L'expansion est plus rapide : il faut recalibrer.
+Amériques : régions de test, non diagnostiquées volontairement.
+Nouvelle grille : adv_max {0,3 ; 0,5} × cx_n0 {1 500 ; 3 000 ; 6 000} × boat_C {0,6 ; 0,75 ; 0,9}.
+
+Mise en garde méthodologique : les régions de test ont maintenant été regardées après plusieurs
+calibrations successives. Pour garder une validation honnête, la version finale sera jugée sur des
+critères encore jamais consultés (population mondiale vers 10k, ordre d'arrivée relatif des
+régions, goulots génétiques), fixés AVANT de regarder les résultats.

@@ -34,6 +34,8 @@ class HumanParams:
     p_sea: float = 0.04         # poids relatif d'un saut maritime (~100-200 km)
     rough_scale: float = 700.0  # m : relief rendant un territoire coûteux à traverser
     allee_n: float = 25.0       # sous ce seuil, risque d'extinction démographique
+    allee_network: float = 6.0  # si > 0 : seuil appliqué au réseau social (allee_n × ce facteur ≈ 150
+                                # personnes, ordre de grandeur d'un réseau de mariage viable)
     p_ext: float = 0.004        # probabilité d'extinction /an sous le seuil
     k_noise: float = 0.15       # variabilité locale (écart-type log) à chaque mise à jour climatique
     # --- V0.3 : eau douce (voir hydrology.py)
@@ -281,6 +283,21 @@ class Demography:
         r = range(-radius, radius + 1)
         return sum(self._view(padded, di, dj, N.shape) for di in r for dj in r)
 
+    def carried_trait(self, sim, name: str, key: str, sigma: float):
+        """Trait culturel tel que le porteraient des arrivants : max(valeur locale, moyenne du réseau
+        voisin pondérée par la population). Une cellule vide a un trait 0, mais ceux qui
+        viendraient s'y installer apportent le leur. Sans cette correction, une cellule vide était
+        jugée avec la culture de personne : l'Arctique paraissait inhabitable même pour des
+        groupes parfaitement adaptés au froid juste à côté (bug corrigé en 0.4.4)."""
+        X = sim.state.get(f"{key}:{name}")
+        if X is None:
+            return None
+        N = sim.state[name]
+        num = self.network(N * X, sigma)
+        den = self.network(N, sigma)
+        nb = np.where(den > 1e-6, num / np.maximum(den, 1e-6), 0)
+        return np.maximum(X, nb).astype(np.float32)
+
     def _complexity_alpha(self, sim, pops, alpha):
         """Avantage compétitif émergent : il dépend de l'écart de complexité culturelle, cellule par
         cellule. Un sapiens au répertoire appauvri peut perdre face aux Néandertaliens."""
@@ -291,8 +308,8 @@ class Demography:
         pa, pb = pops[a], pops[b]
         if not (pa.complexity or pb.complexity):
             return alpha
-        Ca = sim.state.get(f"complexity:{a}") if pa.C_fixed is None else pa.C_fixed
-        Cb = sim.state.get(f"complexity:{b}") if pb.C_fixed is None else pb.C_fixed
+        Ca = self.carried_trait(sim, a, "complexity", pa.net_sigma) if pa.C_fixed is None else pa.C_fixed
+        Cb = self.carried_trait(sim, b, "complexity", pb.net_sigma) if pb.C_fixed is None else pb.C_fixed
         if Ca is None or Cb is None:
             return alpha
         adv = np.clip(max(pa.adv_max, pb.adv_max) * (np.asarray(Ca) - np.asarray(Cb)), -0.5, 0.5).astype(np.float32)
@@ -318,7 +335,7 @@ class Demography:
             c = sim.state.get(f"culture:{name}") if dynamic else None
             if dynamic and c is None:
                 c = np.zeros_like(N, dtype=np.float32)
-            c_eff = c if dynamic else p.c_fixed
+            c_eff = (self.carried_trait(sim, name, "culture", p.net_sigma) if sim.state.get(f"culture:{name}") is not None else c) if dynamic else p.c_fixed
             K = (K_base * cold_factor(T, p, c_eff)).astype(np.float32)
             Ksafe = np.maximum(K, 1e-9)
             load = N.copy()
@@ -371,8 +388,13 @@ class Demography:
                 else:
                     N, _ = self._long_jumps(sim, N, K, p, dt, rng, None, bj)
 
-            # 3c. Les petits groupes peuvent disparaître
-            small = (N > 0) & (N < p.allee_n)
+            # 3c. Les petits groupes peuvent disparaître. Un groupe n'est pas enfermé dans sa cellule :
+            #     le risque dépend de la population de son réseau (mariages, entraide), pas de la
+            #     cellule de 1°, dont la surface fond aux hautes latitudes (4 000 km² à 70° N).
+            if p.allee_network and (p.complexity or p.c_fixed is None):
+                small = (N > 0) & (self.network(N, p.net_sigma) < p.allee_n * p.allee_network)
+            else:
+                small = (N > 0) & (N < p.allee_n)
             dies = small & (rng.random(N.shape, dtype=np.float32) < 1 - (1 - p.p_ext) ** dt)
             N = np.where(dies | (N < 1), 0, N)
 
