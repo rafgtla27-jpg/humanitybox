@@ -1,25 +1,26 @@
-# Calibration honnête : une machine par variante de paramètres, plusieurs mondes par variante.
-# Le classement se fait sur les régions d'entraînement ; les régions de test servent de contrôle.
-# Actions → calibrate → Run workflow. Le tableau final s'affiche dans le résumé du run.
+# Calibration v2 en deux étages (voir sim/worldsim/calibration2.py) :
+#   1. exploration : 30 points en hypercube latin × 5 mondes
+#   2. robustesse  : les 5 meilleurs (sur l'ENTRAÎNEMENT) × 15 mondes de plus
+# Le rapport final s'affiche dans le résumé du run. Durée : ~30 à 45 min.
 name: calibrate
 
 on:
   workflow_dispatch:
     inputs:
-      seeds:
-        description: "Mondes par variante"
-        default: "6"
       climate:
         type: choice
         options: [beyer, parametric]
         default: beyer
+
+env:
+  SEEDS_EXPLORE: "1,2,3,4,5"
+  SEEDS_CONFIRM: "6,7,8,9,10,11,12,13,14,15,16,17,18,19,20"
 
 jobs:
   plan:
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.plan.outputs.matrix }}
-      seeds: ${{ steps.plan.outputs.seeds }}
       scenario: ${{ steps.plan.outputs.scenario }}
     steps:
       - uses: actions/checkout@v4
@@ -30,11 +31,10 @@ jobs:
       - id: plan
         working-directory: sim
         run: |
-          echo "matrix=$(python -m worldsim.calibration plan)" >> "$GITHUB_OUTPUT"
-          echo "scenario=$(python -m worldsim.calibration scenario)" >> "$GITHUB_OUTPUT"
-          echo "seeds=$(python -c "print(','.join(str(i) for i in range(1, int('${{ inputs.seeds }}') + 1)))")" >> "$GITHUB_OUTPUT"
+          echo "matrix=$(python -m worldsim.calibration2 plan)" >> "$GITHUB_OUTPUT"
+          echo "scenario=$(python -m worldsim.calibration2 scenario)" >> "$GITHUB_OUTPUT"
 
-  run:
+  explore:
     needs: plan
     runs-on: ubuntu-latest
     timeout-minutes: 300
@@ -63,18 +63,82 @@ jobs:
           key: beyer2020-annual-v1.2.2
       - run: pip install -e ".[climate]"
       - run: python scripts/fetch_data.py ${{ inputs.climate == 'beyer' && '--beyer' || '' }}
-      - name: Variante ${{ matrix.variant }}
+      - name: Exploration ${{ matrix.variant }}
         run: |
-          python run_experiment_001.py --scenario ${{ needs.plan.outputs.scenario }} --climate ${{ inputs.climate }} --no-frames \
-            --seeds "${{ needs.plan.outputs.seeds }}" --variant ${{ matrix.variant }} ${{ matrix.sets }}
+          python run_experiment_001.py --scenario ${{ needs.plan.outputs.scenario }} --climate ${{ inputs.climate }} \
+            --no-frames --seeds "${{ env.SEEDS_EXPLORE }}" --variant ${{ matrix.variant }} ${{ matrix.sets }}
       - uses: actions/upload-artifact@v4
         with:
-          name: calib-${{ matrix.variant }}
+          name: explore-${{ matrix.variant }}
+          path: sim/outputs
+          retention-days: 7
+
+  select:
+    needs: [plan, explore]
+    if: always()
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.select.outputs.matrix }}
+    defaults:
+      run:
+        working-directory: sim
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -e .
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: explore-*
+          merge-multiple: true
+          path: sim/outputs
+      - id: select
+        run: echo "matrix=$(python -m worldsim.calibration2 select outputs 5)" >> "$GITHUB_OUTPUT"
+
+  confirm:
+    needs: [plan, select]
+    if: ${{ !contains(needs.select.outputs.matrix, '[]') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.select.outputs.matrix) }}
+    defaults:
+      run:
+        working-directory: sim
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - uses: actions/cache@v4
+        with:
+          path: |
+            sim/data/etopo10_ice_g_i2.*
+            sim/data/ETOPO10_LICENSE
+          key: etopo10-v1
+      - if: inputs.climate == 'beyer'
+        uses: actions/cache@v4
+        with:
+          path: sim/data/Beyer2020_annual_vars_v1.2.2.nc
+          key: beyer2020-annual-v1.2.2
+      - run: pip install -e ".[climate]"
+      - run: python scripts/fetch_data.py ${{ inputs.climate == 'beyer' && '--beyer' || '' }}
+      - name: Confirmation ${{ matrix.variant }}
+        run: |
+          python run_experiment_001.py --scenario ${{ needs.plan.outputs.scenario }} --climate ${{ inputs.climate }} \
+            --no-frames --seeds "${{ env.SEEDS_CONFIRM }}" --variant ${{ matrix.variant }} ${{ matrix.sets }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: confirm-${{ matrix.variant }}
           path: sim/outputs
           retention-days: 7
 
   report:
-    needs: run
+    needs: [explore, confirm]
     if: always()
     runs-on: ubuntu-latest
     defaults:
@@ -89,10 +153,10 @@ jobs:
       - run: pip install -e .
       - uses: actions/download-artifact@v4
         with:
-          pattern: calib-*
+          pattern: "*-s*"
           merge-multiple: true
           path: sim/outputs
-      - run: python -m worldsim.calibration report outputs
+      - run: python -m worldsim.calibration2 report outputs
       - run: cat outputs/calibration.md >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         with:
