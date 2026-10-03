@@ -340,3 +340,34 @@ avant tout résultat la concernant, jamais utilisée pour choisir) : population 
 à 10k entre 1 et 10 millions ; ordre d'arrivée corrélé à la référence (Kendall ≥ 0,6) ; pas de sortie
 générale avant 90k dans plus de 20 % des mondes. À évaluer une seule fois, sur au moins 50 mondes
 neufs, quand la V0.3–V0.4 sera figée.
+
+**Calibration v2, tour 1 (0.4.6) — meilleur résultat du projet : entraînement 60 % sur 20 mondes**
+Grille resserrée 0.4.5 (pour mémoire) : plafond à 50 % d'entraînement, l'Europe à 92k dans toutes les
+variantes ; confirme que le levier néandertalien seul, dans 0,1–0,16, ne suffit pas.
+Calibration v2, choix s25 (adv 0,252 ; cx_n0 1 080 ; boat_C 0,845 ; neanderthal_C 0,178 ;
+marine 0,073), 20 mondes : Levant 100 %, Asie du Sud 75 % (52,5k), Europe 30 % (56,5k), Arctique 35 %
+(45,5k). Test : Chine 55 % (42k), Japon 30 % (37k), Australie 0 % (atteinte dans 75 % des mondes,
+mais vers 23k), Amériques jamais. Entraînement 60 %, test 17 %.
+Pour la première fois, Europe et Arctique ont des médianes proches de leurs fourchettes, et la
+sortie d'Afrique se fait sans date imposée. D'autres variantes ont un meilleur test (s06 : 50 % / 37 %),
+mais on choisit sur l'entraînement, sans exception.
+Bords touchés : cx_n0 (1 080 pour un minimum de 1 000) et neanderthal_C (0,178 pour 0,18). Tour 2 :
+espace élargi dans ces directions (cx_n0 600–1 800, neanderthal_C 0,13–0,28, boat_C 0,7–0,95,
+adv_max 0,18–0,4, marine 0,04–0,12). Les valeurs de s25 deviennent les valeurs par défaut du scénario C.
+
+**Australie (test) : tension structurelle, non réglée** — un seuil d'embarcation élevé (0,845) ferme
+Gibraltar mais retarde Wallacea. L'archéologie dit pourtant : Wallacea franchie, Gibraltar non. Ce
+paradoxe est réel et débattu ; on ne le règle pas sur une région de test.
+
+**Amériques (test) : diagnostic du forçage, pas du modèle** — recherche d'un chemin terrestre libre
+de glace depuis l'Alaska, sur les données Beyer à 1° et notre géographie : aucun jusqu'à 14k
+(latitude la plus au sud atteignable : 53,5–55,5° N), un chemin à partir de 13k (corridor libre de
+glace). La route côtière du Pacifique (~16k) n'existe pas à cette résolution sans embarcations.
+Avec une fin de simulation à 10k, la cible « Amérique du Nord 24–13k » est quasi inatteignable par
+construction. Aucune modification : c'est une limite de résolution du forçage, à documenter dans
+la validation finale.
+
+**Transparence sur la validation pré-enregistrée** — le log du run de démonstration s25 (seed 1)
+affiche la population finale (11,7 millions, au-dessus de la fourchette 1–10 millions). Ce diagnostic
+existait avant le pré-enregistrement. On l'a donc vu pour UN monde ; les critères restent inchangés
+et ne serviront à aucun réglage.

@@ -1,5 +1,5 @@
 [
-  { "dir": "B", "title": "B — Eurasie habitée", "detail": "climat Beyer 2020, moteur 0.3.1, 20 mondes", "ensemble": "ensemble_B.json" },
-  { "dir": "A", "title": "A — Monde vide", "detail": "climat Beyer 2020, moteur 0.3.1, 20 mondes", "ensemble": "ensemble_A.json" },
-  { "dir": "C", "title": "C — aperçu moteur 0.4", "detail": "avantage culturel émergent, non calibré ; climat provisoire" }
+  { "dir": "C", "title": "C — calibré (s25)", "detail": "avantage culturel émergent, climat Beyer 2020, moteur 0.4.6, seed 1" },
+  { "dir": "B", "title": "B — Eurasie habitée", "detail": "avantage fixe, climat Beyer 2020, moteur 0.3.1, 20 mondes", "ensemble": "ensemble_B.json" },
+  { "dir": "A", "title": "A — Monde vide", "detail": "climat Beyer 2020, moteur 0.3.1, 20 mondes", "ensemble": "ensemble_A.json" }
 ]

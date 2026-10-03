@@ -26,20 +26,23 @@ import numpy as np
 from .calibration import SCENARIO, TEST, TRAIN
 from .ensemble import load_manifests, score, summarize
 
-# Espace exploré : (min, max, échelle). Bornes vérifiées en local sur le climat Beyer (0.4.3–0.4.5).
+# Espace exploré : (min, max, échelle).
+# Tour 1 (0.4.6) : adv_max 0,2–0,5 ; cx_n0 1 000–3 000 ; boat_C 0,55–0,9 ; neanderthal_C 0,08–0,18 ;
+# marine 0,03–0,15. Choix s25 (entraînement 60 % sur 20 mondes) avec cx_n0 = 1 080 et
+# neanderthal_C = 0,178, collés aux bords de l'espace : le tour 2 l'élargit dans ces directions.
 SPACE = {
-    "adv_max": (0.2, 0.5, "lin"),
-    "cx_n0": (1000.0, 3000.0, "log"),
-    "boat_C": (0.55, 0.9, "lin"),
-    "neanderthal_C": (0.08, 0.18, "lin"),
-    "marine": (0.03, 0.15, "log"),   # ressources côtières : clé de la route du Sud
+    "adv_max": (0.18, 0.4, "lin"),
+    "cx_n0": (600.0, 1800.0, "log"),
+    "boat_C": (0.7, 0.95, "lin"),
+    "neanderthal_C": (0.13, 0.28, "lin"),
+    "marine": (0.04, 0.12, "log"),   # ressources côtières : clé de la route du Sud
 }
 N_EXPLORE = 30
 SEEDS_EXPLORE = 5
 SEEDS_CONFIRM = 15
 
 
-def lhs(n: int, seed: int = 2026) -> list[dict]:
+def lhs(n: int, seed: int = 2027) -> list[dict]:
     """Hypercube latin : chaque paramètre couvre ses n tranches exactement une fois."""
     rng = np.random.default_rng(seed)
     cols = {}
