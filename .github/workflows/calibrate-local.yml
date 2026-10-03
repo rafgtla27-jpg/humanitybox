@@ -1,7 +1,8 @@
-# Calibration v2 sur TON ordinateur (runner auto-hébergé) : gratuit, aucune minute GitHub consommée.
-# Prérequis : un runner auto-hébergé installé et lancé (Settings → Actions → Runners).
+# Calibration v2 sur TON ordinateur Windows (runner auto-hébergé) : gratuit, aucune minute GitHub.
+# Prérequis : Python 3.12 installé sur l'ordinateur (python.org, case « Add python.exe to PATH »)
+# et le runner lancé (run.cmd). Les étapes utilisent cmd, que la politique d'exécution des scripts
+# PowerShell de Windows ne bloque pas. (Sur Mac/Linux : remplacer « shell: cmd » par « shell: bash ».)
 # Actions → calibrate-local → Run workflow. Le tableau final s'affiche dans le résumé du run.
-# Les commandes sont compatibles Windows, macOS et Linux (pas de syntaxe bash).
 name: calibrate-local
 
 on:
@@ -21,16 +22,16 @@ jobs:
     timeout-minutes: 1440
     env:
       # Les données (≈ 330 Mo) sont gardées HORS du dépôt pour survivre d'un run à l'autre
-      WORLDSIM_DATA: ${{ github.workspace }}/../worldsim-data
+      WORLDSIM_DATA: ${{ github.workspace }}\..\worldsim-data
       PYTHONUTF8: "1"
     defaults:
       run:
+        shell: cmd
         working-directory: sim
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
+      - name: Vérifier Python
+        run: python --version
       - run: python -m pip install -e ".[climate]"
       - run: python scripts/fetch_data.py --beyer
       - run: python scripts/calibrate_local.py ${{ inputs.workers != 'auto' && format('--workers {0}', inputs.workers) || '' }} ${{ inputs.smoke && '--smoke' || '' }}
