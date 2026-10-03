@@ -181,3 +181,21 @@ def test_empty_cell_judged_with_newcomers_culture():
     sim.state["N"], sim.state["culture:N"] = N, c
     ce = Demography(HumanParams()).carried_trait(sim, "N", "culture", 3.0)
     assert ce[20, 101] > 0.9 and ce[20, 100] > 0.9 and ce[100, 100] == 0
+
+
+def test_lhs_covers_each_parameter_range():
+    from worldsim.calibration2 import SPACE, lhs, plan
+    pts = lhs(30)
+    for k, (lo, hi, _) in SPACE.items():
+        v = np.array([p[k] for p in pts])
+        assert v.min() >= lo * 0.999 and v.max() <= hi * 1.001
+        assert v.max() - v.min() > 0.8 * (hi - lo)   # bien réparti, pas agglutiné
+    assert len(plan()["include"]) == 30
+
+
+def test_final_validation_is_computable_but_separate():
+    from worldsim import calibration2, final_validation
+    assert "final_validation" not in open(calibration2.__file__).read()  # jamais utilisé pour choisir
+    regions = [{"region": n, "model_bp": v} for n, v in final_validation.REFERENCE_ORDER.items()] + [{"region": "Levant", "model_bp": 110000}]
+    res = final_validation.evaluate([{"series": {"total": [5e6]}, "regions": regions}])
+    assert res["passed"] and res["kendall_tau"] > 0.9  # ex aequo Chine/Australie dans la référence

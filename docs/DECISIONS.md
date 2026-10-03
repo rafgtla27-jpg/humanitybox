@@ -314,3 +314,29 @@ de la littérature, ne fonctionne pas : le sud de l'Arabie est peuplé dès 110k
 au-delà. Prochain diagnostic (Asie du Sud = entraînement) : pourquoi la route sud échoue.
 Calibration exploratoire en attendant : neanderthal_C {0,1 ; 0,13 ; 0,16} × boat_C {0,6 ; 0,75}
 × cx_n0 {1 200 ; 1 500 ; 2 000}, bornes vérifiées en local.
+
+**Diagnostic de la route du Sud (vrai climat, adv 0,3 ; cx_n0 1 500 ; boat_C 0,75 ; néandertaliens 0,1)**
+Elle fonctionne, mais lentement : Yémen peuplé dès 110k (répertoire ~0,8) → Oman et fond du Golfe
+(émergé, Ormuz franchissable à pied dès −22 m) vers 110–100k → côte du Makran vers 90–80k →
+Indus vers 70–60k → Inde de l'Ouest vers 60–50k (Asie du Sud atteinte à ~56k, dans la fourchette).
+Goulot : Oman et Makran, hyperarides (P ≈ 110 mm, eau 0,16–0,34), capacité ≈ 0,01 hab/km² ; les
+réseaux y restent petits, le répertoire s'y érode (0,1–0,4) et la progression prend 40 000 ans.
+Les ressources côtières (coquillages, poisson ; amas coquilliers d'Abdur, Érythrée, ~125k) sont au
+cœur de l'hypothèse de la route du Sud : le paramètre `marine`, jamais calibré, entre dans
+l'espace exploré. Effet de bord connu : il agit aussi sur l'Australie (test), mais il est motivé
+par l'Asie du Sud (entraînement).
+Le blocage observé avec un plafond néandertalien de 0,2 vient du nord (Mésopotamie, Zagros) : la
+route du Sud seule est trop lente pour atteindre l'Inde avant la fin.
+
+**Calibration v2 (méthode)** — les grilles 3×3×2 à 6 mondes avaient trois défauts : optimum au bord,
+seuils abrupts mal échantillonnés, trop de hasard avec 6 mondes. Nouvelle méthode, automatique :
+1. exploration : 30 points en hypercube latin sur 5 paramètres (adv_max, cx_n0, boat_C,
+   neanderthal_C, marine), 5 mondes chacun ;
+2. robustesse : les 5 meilleurs sur l'entraînement rejoués sur 15 mondes de plus ; choix final sur
+   20 mondes, toujours sur l'entraînement.
+
+**Validation finale pré-enregistrée** (`sim/worldsim/final_validation.py`, fixée le 3 octobre 2026
+avant tout résultat la concernant, jamais utilisée pour choisir) : population mondiale de sapiens
+à 10k entre 1 et 10 millions ; ordre d'arrivée corrélé à la référence (Kendall ≥ 0,6) ; pas de sortie
+générale avant 90k dans plus de 20 % des mondes. À évaluer une seule fois, sur au moins 50 mondes
+neufs, quand la V0.3–V0.4 sera figée.
