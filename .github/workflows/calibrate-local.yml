@@ -21,8 +21,6 @@ jobs:
     runs-on: self-hosted
     timeout-minutes: 1440
     env:
-      # Les données (≈ 330 Mo) sont gardées HORS du dépôt pour survivre d'un run à l'autre
-      WORLDSIM_DATA: ${{ github.workspace }}\..\worldsim-data
       PYTHONUTF8: "1"
     defaults:
       run:
@@ -33,7 +31,9 @@ jobs:
       - name: Vérifier Python
         run: python --version
       - run: python -m pip install -e ".[climate]"
-      - run: python scripts/fetch_data.py --beyer
+      # Données dans le dépôt (sim/data : relief ETOPO + climat Beyer compact à 1°) : aucun
+      # téléchargement nécessaire. Le script ne télécharge que ce qui manquerait.
+      - run: python scripts/fetch_data.py
       - run: python scripts/calibrate_local.py ${{ inputs.workers != 'auto' && format('--workers {0}', inputs.workers) || '' }} ${{ inputs.smoke && '--smoke' || '' }}
       - uses: actions/upload-artifact@v4
         with:
