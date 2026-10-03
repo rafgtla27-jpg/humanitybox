@@ -29,7 +29,7 @@ ARCHAIC = HumanParams(p_sea=0.0, c_fixed=0.4, C_fixed=0.35)  # mobiles mais conf
 
 def run(seed: int = 1, start: int = -120_000, end: int = -10_000, params: HumanParams | None = None,
         archaics: bool = False, alpha_sa: float = 1.0, alpha_as: float = 1.0,
-        complexity: bool = False, archaic_C: float | None = None,
+        complexity: bool = False, archaic_C: float | None = None, neanderthal_C: float | None = None,
         snapshot_every: int | None = None, earth=None, grid: Grid | None = None, progress=False, dt: int = 20) -> RunResult:
     grid = grid or Grid(1.0)
     earth = earth or ParametricPaleoEarth(grid)
@@ -63,6 +63,14 @@ def run(seed: int = 1, start: int = -120_000, end: int = -10_000, params: HumanP
                                cx_ceiling=ARCHAIC.C_fixed if archaic_C is None else archaic_C)
         sim.state["populations"]["A"] = arch
         sim.state["range:A"] = eurasia.astype(np.float32)
+        if complexity and neanderthal_C is not None:
+            # Deux mondes archaïques, d'après la répartition des sites : Néandertaliens au nord de
+            # 30° N et à l'ouest de 90° E (Europe, Levant, Anatolie, Caucase, Zagros, Asie centrale
+            # jusqu'à l'Altaï ; outillage moustérien, adaptation au froid). Ailleurs (Arabie, Inde,
+            # Asie orientale et du Sud-Est) : Dénisoviens et autres lignées (H. floresiensis,
+            # H. luzonensis, H. erectus tardif).
+            west = (grid.LAT >= 30) & (grid.LON < 90)
+            sim.state["ceiling:A"] = np.where(west, neanderthal_C, arch.cx_ceiling).astype(np.float32)
         # alpha[(i, j)] = effet de j sur i
         sim.state["alpha"] = {("N", "A"): alpha_sa, ("A", "N"): alpha_as}
 

@@ -295,3 +295,22 @@ Mise en garde méthodologique : les régions de test ont maintenant été regard
 calibrations successives. Pour garder une validation honnête, la version finale sera jugée sur des
 critères encore jamais consultés (population mondiale vers 10k, ordre d'arrivée relatif des
 régions, goulots génétiques), fixés AVANT de regarder les résultats.
+
+**Calibration C 0.4.4 : entraînement 54 %, test 13 %**
+v01 (adv 0,3 ; cx_n0 1 500 ; boat_C 0,75) : Levant 100 %, Asie du Sud 67 % (50,5k), Europe 33 %
+(69k), Arctique 17 % (48k : atteint dans la fourchette pour la première fois). Test : Chine 50 %,
+Japon 17 %, Australie 0 % (24k, trop tard). Les variantes au meilleur test (40 %) n'ont que 25 %
+d'entraînement.
+Lecture : la correction du bug des cellules vides a fait baisser le test de 40 % à 13 %. Le bug
+ralentissait « par accident » une expansion trop rapide ; il ne faut pas regretter ce score.
+Il y a une vraie tension : relever le seuil des embarcations ralentit l'Europe (Gibraltar) mais
+aussi l'Australie (Wallacea). On ne règle pas l'Australie (test).
+Hypothèse testée (0.4.5) : des Néandertaliens culturellement plus riches que les autres
+archaïques, plafond `neanderthal_C` sur leur aire connue (≥ 30° N, < 90° E). Essais locaux :
+0,1 → comme v01 ; 0,2 → sapiens bloqué au Levant (Asie du Sud seulement vers 10k) ; 0,4–0,5 →
+blocage total. Seuil très abrupt, et surtout : dans le modèle, toute l'expansion vers l'Asie passe
+par l'aire néandertalienne. La route sud (Arabie → côte iranienne → Indus), une hypothèse majeure
+de la littérature, ne fonctionne pas : le sud de l'Arabie est peuplé dès 110k mais rien ne passe
+au-delà. Prochain diagnostic (Asie du Sud = entraînement) : pourquoi la route sud échoue.
+Calibration exploratoire en attendant : neanderthal_C {0,1 ; 0,13 ; 0,16} × boat_C {0,6 ; 0,75}
+× cx_n0 {1 200 ; 1 500 ; 2 000}, bornes vérifiées en local.

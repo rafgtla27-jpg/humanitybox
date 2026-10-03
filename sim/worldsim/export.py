@@ -27,7 +27,7 @@ import numpy as np
 
 from .earth import Grid, monsoon_index, sea_level
 
-ENGINE_VERSION = "0.4.4"
+ENGINE_VERSION = "0.4.5"
 LO, HI = 1e-3, 0.5  # hab/km²
 T_RANGE = (-40.0, 35.0)    # °C
 P_RANGE = (10.0, 4000.0)   # mm/an

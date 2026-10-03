@@ -61,6 +61,9 @@ def main():
     for item in a.set:
         key, _, value = item.partition("=")
         overrides[key.strip()] = float(value)
+    neander = overrides.pop("neanderthal_C", None)
+    if neander is not None:
+        kw["neanderthal_C"] = neander
     archaic_C = overrides.pop("archaic_C", None)
     if archaic_C is not None:
         kw["archaic_C"] = archaic_C

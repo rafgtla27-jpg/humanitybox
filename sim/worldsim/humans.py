@@ -50,14 +50,14 @@ class HumanParams:
     # --- V0.4 : complexité culturelle émergente (Henrich 2004 ; Powell, Shennan & Thomas 2009)
     complexity: bool = False    # trait dynamique C ∈ [0, 1] porté par les cohortes
     C_fixed: float | None = None  # valeur imposée (archaïques)
-    cx_n0: float = 10000.0      # population en réseau sous laquelle le répertoire s'érode vers 0
+    cx_n0: float = 1500.0       # population en réseau sous laquelle le répertoire s'érode vers 0 (calibré 0.4.3–0.4.4)
     cx_span: float = 40.0       # C* = 1 atteint pour cx_n0 × cx_span personnes en réseau
     cx_tau_gain: float = 2000.0  # ans : vitesse à laquelle un répertoire s'enrichit
     cx_tau_loss: float = 6000.0  # ans : vitesse d'érosion (on oublie plus lentement qu'on n'apprend)
     cx_ceiling: float = 1.0     # plafond du répertoire (archaïques : capacité d'apprentissage social moindre)
     boat_C: float = 0.5         # complexité à partir de laquelle on sait traverser un bras de mer
                                 # (embarcations = technique complexe) ; sans complexité : pas de limite
-    adv_max: float = 0.3        # avantage compétitif pour un écart de complexité de 1
+    adv_max: float = 0.3        # avantage compétitif pour un écart de complexité de 1 (calibré 0.4.4)
     net_sigma: float = 3.0      # portée du réseau social (cellules, noyau gaussien σ ≈ 330 km)
     # --- V0.3 : contingence explicite
     demo_noise: float = 0.06    # /an : naissances + décès par personne (bruit démographique ∝ √N)
@@ -406,7 +406,8 @@ class Demography:
                 # Le répertoire culturel tend vers un équilibre fixé par la taille du réseau social :
                 # grand réseau → techniques complexes maintenues ; petit réseau → érosion.
                 C = sim.state.get(f"complexity:{name}")
-                target = p.cx_ceiling * np.clip(np.log(np.maximum(n_net, 1) / p.cx_n0) / np.log(p.cx_span), 0, 1)
+                ceiling = sim.state.get(f"ceiling:{name}", p.cx_ceiling)  # carte possible (archaïques)
+                target = ceiling * np.clip(np.log(np.maximum(n_net, 1) / p.cx_n0) / np.log(p.cx_span), 0, 1)
                 if C is None:
                     C = target
                 tau = np.where(target > C, p.cx_tau_gain, p.cx_tau_loss)

@@ -28,16 +28,19 @@ from pathlib import Path
 from .ensemble import load_manifests, score, summarize
 
 SCENARIO = "C"
-# Grille v0.4.4. La calibration 0.4.3 a donné entraînement 50 % / test 40 % (v00 : adv 0,4 ;
-# cx_n0 1 500), mais deux défauts ont été trouvés ensuite sur le vrai climat : traversée de
-# Gibraltar en bateau dès que le répertoire dépasse 0,5 (Europe 93k) et cellules vides jugées
-# avec une culture nulle (Arctique inaccessible). Corrigés, ils accélèrent l'expansion : on
-# recalibre, avec le seuil des embarcations parmi les paramètres. archaic_C est fixé à 0,1
-# (sans effet mesurable à cx_n0 = 1 500 dans la calibration 0.4.3).
+# Grille v0.4.5. Calibration 0.4.4 : meilleur entraînement 54 % (v01 : adv 0,3 ; cx_n0 1 500 ;
+# boat_C 0,75) mais test 13 %, et les variantes au meilleur test (40 %) ont un entraînement de 25 %.
+# Tension structurelle : ralentir l'Europe (seuil des embarcations élevé) retarde aussi l'Australie.
+# Hypothèse testée : les Néandertaliens (ouest de 60° E) avaient un répertoire plus riche que les
+# archaïques d'Asie orientale ; plafond propre `neanderthal_C` (nord de 30° N, ouest de 90° E,
+# d'après la répartition des sites). Les autres archaïques gardent 0,1.
+# Essais locaux (vrai climat, seed 1, adv 0,3 ; cx_n0 1 500 ; boat_C 0,75) : neanderthal_C 0,1 →
+# Europe vers 69k (calibration 0.4.4) ; 0,2 → sapiens bloqué au Levant, Asie du Sud à 10k seulement ;
+# 0,4 et 0,5 → blocage total. Effet de seuil très abrupt : grille resserrée entre 0,1 et 0,2.
 GRID = {
-    "adv_max": [0.3, 0.5],
-    "cx_n0": [1500.0, 3000.0, 6000.0],
-    "boat_C": [0.6, 0.75, 0.9],
+    "neanderthal_C": [0.1, 0.13, 0.16],
+    "boat_C": [0.6, 0.75],
+    "cx_n0": [1200.0, 1500.0, 2000.0],
 }
 # Entraînement : régions aux dates les mieux établies et directement concernées par les paramètres
 TRAIN = ["Levant", "Europe", "Asie du Sud", "Arctique sibérien"]
