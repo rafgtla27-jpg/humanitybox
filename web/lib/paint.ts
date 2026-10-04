@@ -1,7 +1,7 @@
 import type { Manifest } from "./data";
 
-export type Layer = "humans" | "temperature" | "precipitation" | "npp" | "cold" | "complexity";
-const EXTRA_LAYERS: Layer[] = ["cold", "complexity"];
+export type Layer = "humans" | "temperature" | "precipitation" | "npp" | "cold" | "complexity" | "sea";
+const EXTRA_LAYERS: Layer[] = ["cold", "complexity", "sea"];
 
 export const LAYERS: { id: Layer; label: string }[] = [
   { id: "humans", label: "Humains" },
@@ -10,6 +10,7 @@ export const LAYERS: { id: Layer; label: string }[] = [
   { id: "npp", label: "Productivité végétale" },
   { id: "cold", label: "Adaptation au froid" },
   { id: "complexity", label: "Complexité culturelle" },
+  { id: "sea", label: "Savoir maritime" },
 ];
 
 /** Calques réellement disponibles pour un run (les anciens runs n'ont pas tout). */
@@ -41,6 +42,7 @@ export const RAMPS: Record<Exclude<Layer, "humans">, [number, string][]> = {
   precipitation: [[0, "#d9c79b"], [0.35, "#c9c27d"], [0.6, "#7fae6e"], [0.82, "#3f8a83"], [1, "#2a5f93"]],
   npp: [[0, "#6e6250"], [0.3, "#9a9a5c"], [0.65, "#79a453"], [1, "#2f6e35"]],
   cold: [[0, "#e3a13b"], [0.35, "#c9b48a"], [0.65, "#7fb3cf"], [1, "#eaf6fb"]],
+  sea: [[0, "#7a6a52"], [0.3, "#5f9c9a"], [0.65, "#2f8fbf"], [1, "#b8ecff"]],
   complexity: [[0, "#5a3d6e"], [0.35, "#9a5f8a"], [0.6, "#d98a6a"], [0.8, "#f0c062"], [1, "#fff1b8"]],
 };
 const RIVER: RGB = [96, 170, 214];
@@ -167,6 +169,7 @@ export function paintFrame(
 export function legendFor(m: Manifest, layer: Exclude<Layer, "humans">): { min: string; max: string; unit: string } {
   if (layer === "cold") return { min: "aucune", max: "complète (≈ −34 °C)", unit: "" };
   if (layer === "complexity") return { min: "répertoire érodé", max: "répertoire riche", unit: "" };
+  if (layer === "sea") return { min: "terriens", max: "navigateurs", unit: "" };
   const spec = m.climate?.[layer];
   if (!spec) return { min: "", max: "", unit: "" };
   return { min: String(spec.min), max: String(spec.max), unit: spec.unit };

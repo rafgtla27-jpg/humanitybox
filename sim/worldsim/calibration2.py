@@ -27,22 +27,25 @@ from .calibration import SCENARIO, TEST, TRAIN
 from .ensemble import load_manifests, score, summarize
 
 # Espace exploré : (min, max, échelle).
-# Tour 1 (0.4.6) : adv_max 0,2–0,5 ; cx_n0 1 000–3 000 ; boat_C 0,55–0,9 ; neanderthal_C 0,08–0,18 ;
-# marine 0,03–0,15. Choix s25 (entraînement 60 % sur 20 mondes) avec cx_n0 = 1 080 et
-# neanderthal_C = 0,178, collés aux bords de l'espace : le tour 2 l'élargit dans ces directions.
+# Cycle V0.4 (scénario C) : tour 1 → s25, tour 2 → s23 (figé, validation finale NON VALIDÉE).
+# Cycle V0.5 (scénario D, navigation régionale) : boat_C ne sert plus ; le savoir maritime naît des
+# archipels (sea_ref) et autorise les traversées au-delà de boat_s. Les paramètres de s23 sont
+# ré-explorés autour de leurs valeurs, car la navigation change toute la dynamique (essai local
+# seed 1 : Australie jamais, Asie du Sud 38,5k, Europe 75,5k — Bab-el-Mandeb devient difficile).
 SPACE = {
-    "adv_max": (0.18, 0.4, "lin"),
-    "cx_n0": (600.0, 1800.0, "log"),
-    "boat_C": (0.7, 0.95, "lin"),
-    "neanderthal_C": (0.13, 0.28, "lin"),
-    "marine": (0.04, 0.12, "log"),   # ressources côtières : clé de la route du Sud
+    "adv_max": (0.2, 0.4, "lin"),
+    "cx_n0": (600.0, 1600.0, "log"),
+    "neanderthal_C": (0.15, 0.3, "lin"),
+    "marine": (0.03, 0.1, "log"),
+    "boat_s": (0.1, 0.5, "lin"),
+    "sea_ref": (0.08, 0.35, "log"),
 }
 N_EXPLORE = 30
 SEEDS_EXPLORE = 5
 SEEDS_CONFIRM = 15
 
 
-def lhs(n: int, seed: int = 2027) -> list[dict]:
+def lhs(n: int, seed: int = 2028) -> list[dict]:
     """Hypercube latin : chaque paramètre couvre ses n tranches exactement une fois."""
     rng = np.random.default_rng(seed)
     cols = {}

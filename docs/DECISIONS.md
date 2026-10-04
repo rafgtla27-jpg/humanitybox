@@ -400,3 +400,48 @@ Décision : la calibration de cette étape est close. s23 devient le réglage fi
 (moteur 0.4.9). Prochaine et unique étape avant la V0.5 : la validation finale pré-enregistrée sur
 50 mondes neufs (seeds 1001–1050), workflow `validate`, lancée une seule fois ; son résultat sera
 consigné tel quel.
+
+**VALIDATION FINALE PRÉ-ENREGISTRÉE — moteur 0.4.9, scénario C, 50 mondes neufs (seeds 1001–1050)**
+Résultat consigné tel quel, critères inchangés :
+| Critère | Seuil | Résultat | Verdict |
+|---|---|---|---|
+| Population mondiale à 10k (médiane) | 1–10 M | 10,3 M | échoué (de 3 %) |
+| Ordre d'arrivée (Kendall) | ≥ 0,6 | 0,50 | échoué |
+| Sortie générale avant 90k | ≤ 20 % des mondes | 0 % | réussi |
+**Verdict : NON VALIDÉ.** La V0.3–V0.4 est figée en l'état, avec ce verdict.
+
+Lecture (après coup, sans rien modifier) :
+1. Ordre d'arrivée : l'essentiel du désaccord vient de l'Australie, atteinte dans 38 % des mondes
+   seulement et donc classée parmi les dernières alors qu'elle est parmi les premières dans la
+   référence ; s'y ajoutent les Amériques jamais atteintes (limite de résolution du forçage glaciaire)
+   et l'inversion Japon/Arctique. Cause principale identifiée : un seuil de navigation unique et
+   mondial, poussé presque au maximum par la calibration pour fermer Gibraltar.
+2. Population : 10,3 M pour un plafond de 10 M. Échec net mais marginal ; on ne déplace pas le seuil.
+3. Malédiction du vainqueur : entraînement 72 % en calibration (meilleur de 30 points) contre 58 % sur
+   des mondes neufs ; test 21 % → 17 %. Choisir le meilleur parmi beaucoup surestime toujours sa
+   performance : c'est exactement pourquoi la validation finale se fait sur des mondes neufs.
+Acquis solides : sortie d'Afrique ni trop précoce ni bloquée (0 % de sortie générale avant 90k),
+Asie du Sud, Chine, Europe et Arctique atteintes dans 94–100 % des mondes avec des médianes dans
+leurs fourchettes (52,5k ; 42k ; 44,5k ; 37,5k), le tout sans date imposée.
+Suite : navigation régionale (côtes et archipels) inscrite comme premier chantier à reprendre ;
+toute nouvelle tentative de validation exigera des critères et des seeds neufs, et ce verdict
+restera publié à côté.
+
+**V0.5 commence — navigation régionale (scénario D, moteur 0.5.0)**
+Le seuil de navigation unique et mondial (boat_C) est remplacé, dans le scénario D, par un
+*savoir maritime* porté par les cohortes : il naît là où l'on vit entouré de terres atteignables
+seulement par la mer (indice d'archipel : part des directions avec détroit ou saut d'une cellule
+d'eau), exige un répertoire culturel riche, se transporte avec les migrants et s'érode à
+l'intérieur des terres. Indice mesuré à 60k : Wallacea 0,22 (43 % des cellules au-dessus de 0,25),
+Philippines 0,19, mer Égée 0,23, Japon 0,09, côte du Maghreb 0,08, côte d'Afrique de l'Est 0,00.
+Le scénario C (0.4.9) reste figé et reproductible.
+Essai local (seed 1, réglages s23 + sea_ref 0,25 ; boat_s 0,3) : Australie jamais, Asie du Sud
+38,5k, Europe 75,5k. Bab-el-Mandeb exige désormais un savoir maritime que la côte d'Afrique de
+l'Est, rectiligne, ne donne pas : la route du Sud se ferme. Recalibration nécessaire.
+Nouveau cycle, nouvelle répartition (le mécanisme a été conçu à cause de l'Australie) :
+entraînement = Levant, Europe, Asie du Sud, Arctique, Australie ; test = Chine du Sud, Japon
+(traversée maritime vers 38k : test direct du mécanisme), Amériques. Espace exploré : adv_max,
+cx_n0, neanderthal_C, marine, boat_s, sea_ref. Les critères de la prochaine validation finale
+seront pré-enregistrés avant toute évaluation, avec des seeds neuves (≥ 2001).
+Viewer : le monde de validation 1001 (moteur 0.4.9) devient la simulation d'accueil ; calque
+« Savoir maritime » ajouté.

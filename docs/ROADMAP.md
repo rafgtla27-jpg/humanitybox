@@ -48,7 +48,7 @@ du projet.
 | V0.0 | Terre réelle (ETOPO) | aucun | pipeline géospatial | carte 2D | ✅ |
 | V0.1 | Terre paléo paramétrique | cohortes | dispersion, niveau marin | GIF + viewer web, frise | ✅ |
 | V0.2 | Terre paléo Beyer 2020 | cohortes + archaïques | dates d'arrivée vs archéologie | **globe 3D** (R1, livré en avance) + calques climat | ✅ résultats lus (voir DECISIONS) |
-| V0.3 | idem | ✅ eau douce + rivières émergentes, ✅ adaptation au froid culturelle, ✅ contingence explicite (bruit démographique, pionniers) ; à faire : calibration, refuges, goulots | ✅ P(arrivée) sur ensembles ; ✅ calibration v2 (hypercube latin + confirmation sur 20 mondes, entraînement/test séparés) ; ✅ validation finale pré-enregistrée ; calibration close : s23, entraînement 72 % / test 21 % sur 20 mondes ; validation finale à lancer | ✅ rivières, calque culture, distributions dans /labo | 🔧 en cours |
+| V0.3 | idem | ✅ eau douce + rivières émergentes, ✅ adaptation au froid culturelle, ✅ contingence explicite (bruit démographique, pionniers) ; à faire : calibration, refuges, goulots | ✅ P(arrivée) sur ensembles ; ✅ calibration v2 (hypercube latin + confirmation sur 20 mondes, entraînement/test séparés) ; ✅ validation finale pré-enregistrée ; calibration close (s23) ; **validation finale : NON VALIDÉE** (population 10,3 M, ordre d'arrivée τ = 0,50 ; sortie précoce OK) — figée en l'état | ✅ rivières, calque culture, distributions dans /labo | 🔧 en cours |
 | V0.4 | −120k → −5k | ✅ complexité culturelle liée au réseau social (Henrich, Powell 2009), ✅ avantage compétitif émergent (scénario C) ; à faire : graphe de savoirs, oubli d'innovations précises | sortie d'Afrique ~60k sans α fixé à la main (calibration C en cours) | ✅ calque « Complexité culturelle » ; à faire : timeline des savoirs | 🔧 commencée |
 | V0.5 | Holocène | plantes/animaux exploitables (traits), domestication | P(agriculture) par foyer (Croissant fertile, Chine, Mésoamérique, Andes, Nouvelle-Guinée, Sahel) | carte des foyers + probabilités | ⏳ |
 | V0.6 | Holocène + sols (SoilGrids comme ancre) | stockage, sédentarisation, villages, maladies (zoonoses) | densités, croissance post-agricole | **carte stratégique** (R2) : villages, réseaux | ⏳ |
@@ -179,6 +179,7 @@ planètes procédurales plutôt que simulé en continu.
 | Stockage (production → stock → consommation future) | V0.6 | — |
 | Surplus et division du travail | V0.6 | — |
 | Économie avant l'argent : réciprocité → troc → monnaie-marchandise → crédit, prix, marchés, banques | V0.7 | — |
+| Navigation régionale (côtes, archipels, intervisibilité des îles) — cause principale de l'échec de validation 0.4.9 | V0.5 (avancée) | 🔧 scénario D, savoir maritime d'archipel (0.5.0), calibration en cours |
 | Transport : coût dépendant de la technologie (pied, cheval, bateau) → routes, cols, ports, villes | V0.7 | coût du relief ✅, embarcations liées au répertoire ✅ (0.4.3) |
 | Réseaux commerciaux physiques (masse, volume, valeur, périssabilité, danger) | V0.7 | — |
 | Moteur social : parenté, dette, confiance | V0.6 | — |

@@ -56,6 +56,12 @@ class HumanParams:
     cx_tau_loss: float = 6000.0  # ans : vitesse d'érosion (on oublie plus lentement qu'on n'apprend)
     cx_ceiling: float = 1.0     # plafond du répertoire (archaïques : capacité d'apprentissage social moindre)
     boat_C: float = 0.939       # complexité à partir de laquelle on sait traverser un bras de mer (s23)
+    # --- V0.5 : navigation régionale (savoir maritime né des environnements d'archipel)
+    maritime: bool = False      # si vrai, les traversées dépendent du savoir maritime, pas de boat_C
+    sea_ref: float = 0.25       # indice d'archipel donnant une exposition complète (≈ 2 liens maritimes sur 8)
+    boat_s: float = 0.3         # savoir maritime à partir duquel on traverse
+    sea_tau_gain: float = 3000.0
+    sea_tau_loss: float = 6000.0
                                 # (embarcations = technique complexe) ; sans complexité : pas de limite
     adv_max: float = 0.302      # avantage compétitif pour un écart de complexité de 1 (calibré s23, tour 2)
     net_sigma: float = 3.0      # portée du réseau social (cellules, noyau gaussien σ ≈ 330 km)
@@ -103,6 +109,21 @@ class Ecology:
             from .hydrology import Hydrology
             self.hydro = Hydrology(grid, self.topo)
 
+    @staticmethod
+    def archipelago_index(passable: np.ndarray, conn: dict) -> np.ndarray:
+        """Part des directions où une terre voisine n'est atteignable que par la mer : liens
+        maritimes directs (détroits) et sauts d'une cellule d'eau (poids ½). Élevé dans les
+        archipels (Wallacea, Philippines, Japon), faible sur une côte rectiligne (Maghreb)."""
+        water = ~passable
+        idx = np.zeros(passable.shape, np.float32)
+        for (di, dj), linked in conn.items():
+            dest = _shifted(passable, di, dj)
+            idx += (passable & dest & ~linked).astype(np.float32)
+            mid = _shifted(water, di, dj)
+            far = _shifted(passable, 2 * di, 2 * dj)
+            idx += 0.5 * (passable & mid & far).astype(np.float32)
+        return idx / 8.0
+
     def carrying_capacity(self, s, water: np.ndarray | None = None, river: np.ndarray | None = None) -> np.ndarray:
         p, g = self.p, self.grid
         land_area = g.cell_area_km2 * s.land_frac
@@ -130,7 +151,20 @@ class Ecology:
         sim.state["K"] = (k * noise).astype(np.float32)
         sim.state["passable"] = (s.land_frac > 0.02) & ~s.ice
         sim.state["conn"] = self.topo.connectivity(s.sea_level)  # liens à pied entre cellules voisines
+        sim.state["archipelago"] = self.archipelago_index(sim.state["passable"], sim.state["conn"])
         sim.state["rough_cost"] = np.exp(-s.roughness / self.p.rough_scale).astype(np.float32)
+
+
+def _shifted(a: np.ndarray, di: int, dj: int) -> np.ndarray:
+    out = np.roll(a, -dj, axis=1)
+    res = np.zeros_like(out)
+    if di > 0:
+        res[:-di] = out[di:]
+    elif di < 0:
+        res[-di:] = out[:di]
+    else:
+        res = out
+    return res
 
 
 def cold_factor(temperature: np.ndarray, p: HumanParams, c) -> np.ndarray:
@@ -214,6 +248,11 @@ class Demography:
         if not carried:
             return move(N)
         return move(N), [move(X) for X in carried]
+
+    @staticmethod
+    def sea_factor(S, p) -> np.ndarray:
+        """0 sous boat_s, 1 pour un savoir maritime complet."""
+        return np.clip((np.asarray(S) - p.boat_s) / max(1e-6, 1 - p.boat_s), 0, 1).astype(np.float32)
 
     @staticmethod
     def boat_factor(C, p) -> np.ndarray:
@@ -359,9 +398,13 @@ class Demography:
                 out_rate = np.clip((p.m_base + p.m_press * pressure) * dt, 0, 0.5).astype(np.float32)
                 hop_coefs = coefs if p.p_sea > 0 else coefs[:len(ADJ)]
                 cx_now = sim.state.get(f"complexity:{name}") if p.complexity and p.C_fixed is None else None
-                boats = None if cx_now is None else self.boat_factor(cx_now, p)
+                sea = sim.state.get(f"sea:{name}") if p.maritime else None
+                if p.maritime:
+                    boats = None if sea is None else self.sea_factor(sea, p)
+                else:
+                    boats = None if cx_now is None else self.boat_factor(cx_now, p)
                 cx = sim.state.get(f"complexity:{name}") if p.complexity and p.C_fixed is None else None
-                carried = ([N * c] if dynamic else []) + ([N * cx] if cx is not None else [])
+                carried = ([N * c] if dynamic else []) + ([N * cx] if cx is not None else []) + ([N * sea] if sea is not None else [])
                 if carried:
                     N, moved = self.migrate(N, room, out_rate, hop_coefs, carried=tuple(carried), hop_scale=boats)
                     safe = np.maximum(N, 1e-9)
@@ -369,6 +412,8 @@ class Demography:
                         c = np.where(N > 1e-9, np.clip(moved.pop(0) / safe, 0, 1), 0)
                     if cx is not None:
                         sim.state[f"complexity:{name}"] = np.where(N > 1e-9, np.clip(moved.pop(0) / safe, 0, 1), 0).astype(np.float32)
+                    if sea is not None:
+                        sim.state[f"sea:{name}"] = np.where(N > 1e-9, np.clip(moved.pop(0) / safe, 0, 1), 0).astype(np.float32)
                 else:
                     N = self.migrate(N, room, out_rate, hop_coefs, hop_scale=boats)
 
@@ -382,7 +427,11 @@ class Demography:
             #     C'est ce qui rend chaque histoire différente : où et quand ils partent, s'ils survivent.
             if p.ldd_rate > 0 and (p.m_base > 0 or p.m_press > 0):
                 cxj = sim.state.get(f"complexity:{name}") if p.complexity and p.C_fixed is None else None
-                bj = None if cxj is None else self.boat_factor(cxj, p)
+                if p.maritime:
+                    seaj = sim.state.get(f"sea:{name}")
+                    bj = None if seaj is None else self.sea_factor(seaj, p)
+                else:
+                    bj = None if cxj is None else self.boat_factor(cxj, p)
                 if dynamic:
                     N, c = self._long_jumps(sim, N, K, p, dt, rng, c, bj)
                 else:
@@ -413,6 +462,19 @@ class Demography:
                 tau = np.where(target > C, p.cx_tau_gain, p.cx_tau_loss)
                 C = C + (target - C) * (1 - np.exp(-dt / tau))
                 sim.state[f"complexity:{name}"] = np.where(N > 0, C, 0).astype(np.float32)
+                if p.maritime:
+                    # Savoir maritime : naît là où l'on vit entouré d'îles et de bras de mer, exige un
+                    # répertoire riche (embarcations, cordages, navigation à vue), se perd à l'intérieur
+                    # des terres. Remplace le seuil de navigation unique et mondial (cause principale
+                    # de l'échec de la validation 0.4.9).
+                    S = sim.state.get(f"sea:{name}")
+                    if S is None:
+                        S = np.zeros_like(C)
+                    expo = np.clip(sim.state.get("archipelago", 0) / p.sea_ref, 0, 1)
+                    target_s = expo * C
+                    tau_s = np.where(target_s > S, p.sea_tau_gain, p.sea_tau_loss)
+                    S = S + (target_s - S) * (1 - np.exp(-dt / tau_s))
+                    sim.state[f"sea:{name}"] = np.where(N > 0, S, 0).astype(np.float32)
             if dynamic:
                 n_eff = n_net
                 stressed = T < p.t_ok + 5

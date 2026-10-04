@@ -26,12 +26,13 @@ SCENARIOS = {
     "A": ("Monde vide", dict(archaics=False)),
     "B": ("Eurasie habitée (α 0.9 / 1.1)", dict(archaics=True, alpha_sa=0.9, alpha_as=1.1)),
     "C": ("Eurasie habitée, avantage culturel émergent", dict(archaics=True, complexity=True, archaic_C=0.1, neanderthal_C=0.241)),
+    "D": ("C + navigation régionale (V0.5)", dict(archaics=True, complexity=True, maritime=True, archaic_C=0.1, neanderthal_C=0.241)),
 }
 
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--scenario", choices=SCENARIOS, default="A")
+    ap.add_argument("--scenario", choices=SCENARIOS, default="A")  # D = V0.5
     ap.add_argument("--seeds", default="1")
     ap.add_argument("--gif", action="store_true")
     ap.add_argument("--publish", action="store_true")

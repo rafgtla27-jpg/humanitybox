@@ -1,5 +1,5 @@
 [
-  { "dir": "C", "title": "C — calibré (s25)", "detail": "avantage culturel émergent, climat Beyer 2020, moteur 0.4.6, seed 1" },
+  { "dir": "C", "title": "C — monde de validation 1001", "detail": "moteur 0.4.9 figé, climat Beyer 2020 ; distribution sur 50 mondes neufs", "ensemble": "ensemble_C.json" },
   { "dir": "B", "title": "B — Eurasie habitée", "detail": "avantage fixe, climat Beyer 2020, moteur 0.3.1, 20 mondes", "ensemble": "ensemble_B.json" },
   { "dir": "A", "title": "A — Monde vide", "detail": "climat Beyer 2020, moteur 0.3.1, 20 mondes", "ensemble": "ensemble_A.json" }
 ]

@@ -27,7 +27,7 @@ from pathlib import Path
 
 from .ensemble import load_manifests, score, summarize
 
-SCENARIO = "C"
+SCENARIO = "D"  # V0.5 : C + navigation régionale
 # Grille v0.4.5. Calibration 0.4.4 : meilleur entraînement 54 % (v01 : adv 0,3 ; cx_n0 1 500 ;
 # boat_C 0,75) mais test 13 %, et les variantes au meilleur test (40 %) ont un entraînement de 25 %.
 # Tension structurelle : ralentir l'Europe (seuil des embarcations élevé) retarde aussi l'Australie.
@@ -43,9 +43,12 @@ GRID = {
     "cx_n0": [1200.0, 1500.0, 2000.0],
 }
 # Entraînement : régions aux dates les mieux établies et directement concernées par les paramètres
-TRAIN = ["Levant", "Europe", "Asie du Sud", "Arctique sibérien"]
+# Cycle V0.5 : la navigation régionale a été conçue après l'échec australien de la validation 0.4.9,
+# donc l'Australie passe en ENTRAÎNEMENT. Le Japon (traversée maritime ~38k) devient le test clé
+# du mécanisme maritime, avec la Chine du Sud et les Amériques.
+TRAIN = ["Levant", "Europe", "Asie du Sud", "Arctique sibérien", "Australie"]
 # Test : jamais regardées pendant le choix des paramètres
-TEST = ["Chine du Sud", "Australie", "Japon", "Amérique du Nord (sud des glaces)", "Amérique du Sud"]
+TEST = ["Chine du Sud", "Japon", "Amérique du Nord (sud des glaces)", "Amérique du Sud"]
 
 
 def variants() -> list[dict]:
