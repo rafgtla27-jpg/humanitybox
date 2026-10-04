@@ -59,6 +59,8 @@ class HumanParams:
     # --- V0.5 : navigation régionale (savoir maritime né des environnements d'archipel)
     maritime: bool = False      # si vrai, les traversées dépendent du savoir maritime, pas de boat_C
     sea_ref: float = 0.25       # indice d'archipel donnant une exposition complète (≈ 2 liens maritimes sur 8)
+    sea_regional: bool = True   # exposition = moyenne régionale de l'indice (portée du réseau social),
+                                # pas la seule cellule : un cap au bord d'un détroit (Gibraltar) n'est pas un archipel
     boat_s: float = 0.3         # savoir maritime à partir duquel on traverse
     sea_tau_gain: float = 3000.0
     sea_tau_loss: float = 6000.0
@@ -470,7 +472,15 @@ class Demography:
                     S = sim.state.get(f"sea:{name}")
                     if S is None:
                         S = np.zeros_like(C)
-                    expo = np.clip(sim.state.get("archipelago", 0) / p.sea_ref, 0, 1)
+                    arch = sim.state.get("archipelago")
+                    if arch is None:
+                        arch = np.zeros_like(C)
+                    if p.sea_regional:
+                        land = sim.state["passable"].astype(np.float32)
+                        num = self.network(arch * land, p.net_sigma)
+                        den = self.network(land, p.net_sigma)
+                        arch = np.where(den > 1e-6, num / np.maximum(den, 1e-6), 0)
+                    expo = np.clip(arch / p.sea_ref, 0, 1)
                     target_s = expo * C
                     tau_s = np.where(target_s > S, p.sea_tau_gain, p.sea_tau_loss)
                     S = S + (target_s - S) * (1 - np.exp(-dt / tau_s))

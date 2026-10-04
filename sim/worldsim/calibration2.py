@@ -32,20 +32,25 @@ from .ensemble import load_manifests, score, summarize
 # archipels (sea_ref) et autorise les traversées au-delà de boat_s. Les paramètres de s23 sont
 # ré-explorés autour de leurs valeurs, car la navigation change toute la dynamique (essai local
 # seed 1 : Australie jamais, Asie du Sud 38,5k, Europe 75,5k — Bab-el-Mandeb devient difficile).
+# Cycle V0.5, tour 2 (0.5.1) : exposition maritime RÉGIONALE (moyenne de l'indice d'archipel sur la
+# portée du réseau social). Indice régional mesuré : Wallacea 0,18–0,28 ; Philippines 0,18 ; Japon 0,12 ;
+# Maroc nord (Gibraltar) 0,09 ; Bab-el-Mandeb 0,09 ; Tunisie 0,05. Tour 1 (exposition par cellule) :
+# s00 = Australie 95 % mais Europe 94k, Arctique 74k, Japon 64k ; l'optimiseur a sacrifié l'Eurasie
+# à l'Australie. Les paramètres eurasiens sont ramenés autour de s23 (cycle C), la navigation reste libre.
 SPACE = {
-    "adv_max": (0.2, 0.4, "lin"),
-    "cx_n0": (600.0, 1600.0, "log"),
-    "neanderthal_C": (0.15, 0.3, "lin"),
-    "marine": (0.03, 0.1, "log"),
-    "boat_s": (0.1, 0.5, "lin"),
-    "sea_ref": (0.08, 0.35, "log"),
+    "adv_max": (0.25, 0.36, "lin"),
+    "cx_n0": (800.0, 1300.0, "log"),
+    "neanderthal_C": (0.2, 0.3, "lin"),
+    "marine": (0.03, 0.08, "log"),
+    "boat_s": (0.2, 0.6, "lin"),
+    "sea_ref": (0.1, 0.3, "log"),
 }
 N_EXPLORE = 30
 SEEDS_EXPLORE = 5
 SEEDS_CONFIRM = 15
 
 
-def lhs(n: int, seed: int = 2028) -> list[dict]:
+def lhs(n: int, seed: int = 2029) -> list[dict]:
     """Hypercube latin : chaque paramètre couvre ses n tranches exactement une fois."""
     rng = np.random.default_rng(seed)
     cols = {}

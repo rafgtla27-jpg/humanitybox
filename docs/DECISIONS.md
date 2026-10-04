@@ -445,3 +445,20 @@ cx_n0, neanderthal_C, marine, boat_s, sea_ref. Les critères de la prochaine val
 seront pré-enregistrés avant toute évaluation, avec des seeds neuves (≥ 2001).
 Viewer : le monde de validation 1001 (moteur 0.4.9) devient la simulation d'accueil ; calque
 « Savoir maritime » ajouté.
+
+**Calibration D, tour 1 (0.5.0)** — choix s00 (adv 0,335 ; cx_n0 806 ; neanderthal_C 0,221 ;
+marine 0,047 ; boat_s 0,179 ; sea_ref 0,139), 20 mondes : entraînement 53 %, test 25 %.
+Australie 95 % (51k) : le savoir maritime d'archipel résout le problème australien. Mais Europe 94k,
+Arctique 74k (0 % chacun), Japon 64k (test, trop tôt) : avec un seuil de navigation bas, l'optimiseur
+a ouvert toutes les traversées et accéléré l'Eurasie. La tension Australie/Europe change de forme.
+Défaut identifié : l'exposition était calculée par cellule ; la pointe du Maroc, au bord du détroit,
+« voyait » l'Espagne comme une île (indice 0,38). Correction (0.5.1, motivée par l'Europe,
+entraînement) : exposition régionale = moyenne de l'indice d'archipel sur la portée du réseau
+social. Wallacea 0,18–0,28, Philippines 0,18, Japon 0,12, Gibraltar 0,09, Bab-el-Mandeb 0,09.
+Essai local (s00 + boat_s 0,35 ; sea_ref 0,2) : Australie 44k (presque dans la fourchette), Europe
+89,5k toujours trop tôt — cette fois par les paramètres eurasiens de s00, pas par la mer.
+Tour 2 : paramètres eurasiens ramenés autour de s23, navigation libre.
+
+**Viewer** : « Aucun run disponible » sur Vercel — des variables Supabase sont configurées, la
+base est vide, et le viewer n'affichait alors que Supabase. Corrigé : les runs de démonstration
+sont toujours listés en premier, ceux de Supabase s'y ajoutent.

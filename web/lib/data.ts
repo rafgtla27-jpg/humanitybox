@@ -52,18 +52,21 @@ const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/$/, "");
 const ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 export const source: "supabase" | "demo" = SUPABASE_URL && ANON ? "supabase" : "demo";
 
-export async function listRuns(): Promise<RunRef[]> {
-  if (source === "demo") {
-    const index: { dir: string; title: string; detail: string; ensemble?: string }[] = await (await fetch("/demo/index.json")).json();
-    return index.map((r) => ({
-      key: r.dir,
-      title: r.title,
-      detail: r.detail,
-      manifestUrl: `/demo/${r.dir}/manifest.json`,
-      baseUrl: `/demo/${r.dir}`,
-      ensembleUrl: r.ensemble ? `/demo/${r.ensemble}` : undefined,
-    }));
-  }
+async function listDemoRuns(): Promise<RunRef[]> {
+  const res = await fetch("/demo/index.json");
+  if (!res.ok) return [];
+  const index: { dir: string; title: string; detail: string; ensemble?: string }[] = await res.json();
+  return index.map((r) => ({
+    key: `demo:${r.dir}`,
+    title: r.title,
+    detail: r.detail,
+    manifestUrl: `/demo/${r.dir}/manifest.json`,
+    baseUrl: `/demo/${r.dir}`,
+    ensembleUrl: r.ensemble ? `/demo/${r.ensemble}` : undefined,
+  }));
+}
+
+async function listSupabaseRuns(): Promise<RunRef[]> {
   const res = await fetch(
     `${SUPABASE_URL}/rest/v1/runs?select=id,scenario,label,seed,engine_version,climate_provider,created_at,storage_prefix` +
       `&has_frames=eq.true&storage_prefix=not.is.null&order=created_at.desc&limit=30`,
@@ -83,6 +86,15 @@ export async function listRuns(): Promise<RunRef[]> {
       baseUrl: base,
     };
   });
+}
+
+/** Runs publiés dans Supabase (s'il est configuré) PUIS runs de démonstration embarqués.
+ *  Un Supabase vide ou en panne ne doit jamais laisser le globe sans rien à montrer. */
+export async function listRuns(): Promise<RunRef[]> {
+  const demo = await listDemoRuns().catch(() => []);
+  if (source !== "supabase") return demo;
+  const published = await listSupabaseRuns().catch(() => [] as RunRef[]);
+  return [...demo, ...published];
 }
 
 async function fetchBinary(url: string): Promise<Uint8Array> {
@@ -123,11 +135,11 @@ export async function loadRun(
 /** Toutes les seeds du même scénario, climat et moteur que le run affiché. */
 export async function loadEnsemble(ref: RunRef, m: Manifest): Promise<Ensemble | null> {
   try {
-    if (source === "demo") {
-      if (!ref.ensembleUrl) return null;
+    if (ref.ensembleUrl) {
       const res = await fetch(ref.ensembleUrl);
       return res.ok ? await res.json() : null;
     }
+    if (source !== "supabase") return null;
     const h = { apikey: ANON!, Authorization: `Bearer ${ANON}` };
     const runs: { id: string }[] = await (await fetch(
       `${SUPABASE_URL}/rest/v1/runs?select=id&experiment_id=eq.${m.experiment_id}&scenario=eq.${m.scenario}` +
