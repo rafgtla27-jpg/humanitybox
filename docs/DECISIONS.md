@@ -383,3 +383,20 @@ pip venait de fonctionner. Pour ne plus dépendre du réseau pendant les calculs
 sont désormais stockées dans le dépôt privé (`sim/data` : relief ETOPO 10′, 4,7 Mo ; climat Beyer
 compact à 1°, 10,9 Mo). La calibration locale utilise donc la version compacte du climat (précision
 float16, différences négligeables avec le netCDF). `fetch_data.py` réessaie 5 fois en cas d'échec.
+
+**Calibration v2, tour 2 — fin de la calibration de la V0.3–V0.4 (dépôt passé en public)**
+Choix s23 (adv 0,302 ; cx_n0 985 ; boat_C 0,939 ; neanderthal_C 0,241 ; marine 0,052), 20 mondes :
+Levant 100 %, Asie du Sud 75 % (53,8k), Europe 60 % (46k), Arctique 55 % (38,5k) → entraînement 72 %.
+Test : Chine 60 % (43,5k), Japon 45 % (33k), Australie 0 % (atteinte dans 30 % des mondes, ~20k),
+Amériques jamais → test 21 %.
+Europe et Arctique ont désormais des médianes DANS leurs fourchettes : sortie d'Afrique, arrivée en
+Europe et colonisation de l'Arctique émergent du climat, de la démographie et de la culture.
+Limite assumée : boat_C = 0,939 colle au bord haut de l'espace, c'est-à-dire « presque pas de
+navigation ». L'entraînement pousse vers un monde sans bateaux pour fermer Gibraltar, ce que
+contredit la colonisation de Sahul. Le modèle n'a qu'un seuil de navigation mondial ; la
+navigation liée aux environnements côtiers et insulaires relève de la V0.7 (transport), pas d'un
+réglage. On n'élargit pas l'espace au-delà : ce serait supprimer les bateaux.
+Décision : la calibration de cette étape est close. s23 devient le réglage figé du scénario C
+(moteur 0.4.9). Prochaine et unique étape avant la V0.5 : la validation finale pré-enregistrée sur
+50 mondes neufs (seeds 1001–1050), workflow `validate`, lancée une seule fois ; son résultat sera
+consigné tel quel.
