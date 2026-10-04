@@ -8,8 +8,8 @@ on:
       scenario:
         description: "Scénario (A = monde vide, B = Eurasie habitée, C = avantage culturel émergent)"
         type: choice
-        options: [A, B, C]
-        default: C
+        options: [A, B, C, D]
+        default: D
       climate:
         description: "Climat"
         type: choice
