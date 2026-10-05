@@ -228,3 +228,34 @@ button { font: inherit; color: inherit; }
 .people-panel .close { position: absolute; top: 8px; right: 10px; border: 0; background: transparent; color: #9a9a95; font-size: 1.3rem; cursor: pointer; }
 .people-panel .story { list-style: none; margin: 12px 0 0; padding: 10px 0 0; border-top: 1px solid rgba(255, 255, 255, 0.08); display: grid; gap: 4px; font-size: 0.8rem; color: #cfcfca; }
 .people-panel .story b, .chronicle li.fav b { color: #ff9fb2; }
+/* ---------- Noms sur le globe, villages de cœur ---------- */
+.globe-labels { position: absolute; inset: 0; pointer-events: none; z-index: 2; overflow: hidden; }
+.globe-label {
+  position: absolute; left: 0; top: 0; pointer-events: auto; cursor: pointer; white-space: nowrap;
+  border: 0; background: rgba(12, 12, 14, 0.45); color: #f2efe6; padding: 2px 7px; border-radius: 4px;
+  font-family: var(--serif); font-size: 0.82rem; text-shadow: 0 1px 2px #000;
+}
+.globe-label[data-w="3"] { font-size: 0.95rem; letter-spacing: 0.06em; text-transform: uppercase; background: transparent; color: #fff6dc; }
+.globe-label[data-w="2"] { font-size: 0.95rem; font-style: italic; background: transparent; }
+.globe-label[data-heart="1"] { color: #ffd7de; background: rgba(120, 30, 50, 0.6); }
+.hearts { position: absolute; top: max(16px, env(safe-area-inset-top)); left: 16px; display: flex; flex-wrap: wrap; gap: 6px; max-width: 60vw; }
+.hearts .fav-chip { position: static; }
+/* ---------- Arbre des savoirs ---------- */
+.tech-tree { position: absolute; inset: 64px 16px 110px 16px; z-index: 5; overflow: auto; padding: 16px 20px; border-radius: 14px; background: rgba(14, 14, 16, 0.9); border: 1px solid rgba(255, 255, 255, 0.12); color: #e9e9e6; backdrop-filter: blur(12px); }
+.tech-tree header { position: relative; margin-bottom: 12px; }
+.tech-tree h2 { margin: 0; font-family: var(--serif); font-weight: 500; font-size: 1.5rem; }
+.tech-tree header p { margin: 4px 0 0; color: #a3a39e; font-size: 0.85rem; max-width: 80ch; }
+.tech-tree .close { position: absolute; top: 0; right: 0; border: 0; background: transparent; color: #9a9a95; font-size: 1.5rem; cursor: pointer; }
+.eras { display: grid; grid-template-columns: repeat(5, minmax(180px, 1fr)); gap: 12px; }
+.era h3 { margin: 0 0 8px; font-size: 0.85rem; color: #e3a13b; font-weight: 600; letter-spacing: 0.03em; }
+.tech { padding: 8px 10px; margin-bottom: 6px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.08); background: rgba(255, 255, 255, 0.02); opacity: 0.55; }
+.tech.known { opacity: 1; }
+.tech.mine { border-color: #9ccc4a; background: rgba(156, 204, 74, 0.1); }
+.tname { font-size: 0.88rem; }
+.tpre { font-size: 0.72rem; color: #8d8d88; margin-top: 2px; }
+.tstat { font-size: 0.72rem; color: #b8b8b2; margin-top: 4px; }
+.tstat b { color: #e9e9e6; }
+.techs-line { display: flex; flex-wrap: wrap; gap: 4px; margin: -4px 0 12px; }
+.techs-line span { font-size: 0.72rem; padding: 2px 6px; border-radius: 4px; background: rgba(156, 204, 74, 0.14); color: #d6ecb4; }
+.techs-line .link { border: 0; background: transparent; color: #e3a13b; cursor: pointer; font-size: 0.75rem; }
+@media (max-width: 900px) { .eras { grid-template-columns: 1fr 1fr; } }

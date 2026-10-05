@@ -7,7 +7,11 @@
  * Simplifications assumées par rapport au moteur de référence : pas de sauts de pionniers
  * lointains ; réseaux sociaux recalculés tous les 100 ans ; climat interpolé entre tranches.
  */
+import { Settlements } from "./settlements";
+import { NT, TECHS, TECH_INDEX, type Ctx } from "./techs";
 export const NY = 180, NX = 360, NC = NY * NX;
+/** Décalage de chaque savoir dans le tableau `tech` (évite des recherches dans la boucle chaude). */
+const TO = Object.fromEntries(TECHS.map((t, i) => [t.id, i * 180 * 360])) as Record<string, number>;
 const DIRS: [number, number][] = [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1]];
 const DIAG = [0.7, 1, 0.7, 1, 1, 0.7, 1, 0.7];
 
@@ -95,6 +99,13 @@ export class LiveEngine {
   M0 = new Float32Array(NC); M1 = new Float32Array(NC); M2 = new Float32Array(NC);
   peopleIdx = new Uint8Array(NC);
   peoples: People[] = [];
+  settlements = new Settlements();
+  // Graphe des savoirs : maîtrise de chaque savoir, par cellule (TECHS[t] → tech[t * NC + k])
+  tech = new Float32Array(NT * NC);
+  techFirst: ({ year: number; where: string } | null)[] = TECHS.map(() => null);
+  ore = new Float32Array(NC);
+  Pr = new Float32Array(NC);
+  river = new Float32Array(NC);
   private nextPeopleId = 1;
   // environnement interpolé
   K = new Float32Array(NC); T = new Float32Array(NC); pot = new Float32Array(NC); lf = new Float32Array(NC);
@@ -108,10 +119,11 @@ export class LiveEngine {
   private steps = 0;
   private effects: Effect[] = [];
   private envSlice = -1;
-  events: { year: number; text: string; people?: number }[] = [];
+  events: { year: number; text: string; people?: number; settlement?: number }[] = [];
 
-  constructor(private env: Env, seed = 1) {
+  constructor(private env: Env, seed = 1, startYear = -120_000) {
     this.rand = rng(seed);
+    this.year = startYear;
     for (let i = 0; i < NY; i++) for (let j = 0; j < NX; j++) {
       const k = i * NX + j, lat = 90 - (i + 0.5), lon = -180 + (j + 0.5);
       const africa = lat >= -35 && lat <= 12 && lon >= -18 && lon <= 52;
@@ -120,9 +132,22 @@ export class LiveEngine {
       this.ceilA[k] = lat >= 30 && lon < 90 ? P.neanderC : P.archC;
     }
     this.loadEnv();
+    // Minerais : surtout dans les reliefs tourmentés (montagnes), répartis par un hasard fixe
+    for (let k = 0; k < NC; k++) {
+      const rough = -700 * Math.log(Math.max(1e-3, this.env.rough[k] / 255));
+      const h = ((Math.imul(k ^ 0x9e3779b9, 2654435761) >>> 0) % 1000) / 1000;
+      this.ore[k] = h < Math.min(0.6, rough / 900) ? 1 : h < 0.04 ? 0.6 : 0;
+    }
+    const fire = TECH_INDEX.get("fire")!, stone = TECH_INDEX.get("stone")!;
+    this.tech.fill(1, fire * NC, (fire + 1) * NC);
+    this.tech.fill(1, stone * NC, (stone + 1) * NC);
     for (let k = 0; k < NC; k++) {
       const i = Math.floor(k / NX), j = k % NX, lat = 90 - (i + 0.5), lon = -180 + (j + 0.5);
-      if (lat >= -35 && lat <= 12 && lon >= -18 && lon <= 52) this.N[k] = 0.5 * this.K[k];
+      if (startYear > -70_000) {
+        // Partie commencée plus tard : le monde est déjà peuplé là où l'on peut vivre
+        this.N[k] = 0.5 * this.K[k];
+        if (startYear > -40_000) continue;
+      } else if (lat >= -35 && lat <= 12 && lon >= -18 && lon <= 52) this.N[k] = 0.5 * this.K[k];
       if (this.rangeA[k]) this.A[k] = 0.6 * this.K[k];
     }
     // Structure ancienne de l'Afrique : des marqueurs qui varient doucement d'une région à l'autre
@@ -135,6 +160,7 @@ export class LiveEngine {
     }
     this.networks();
     for (let k = 0; k < NC; k++) {
+      if (startYear > -70_000 && this.N[k] > 0) { this.c[k] = 0.8; this.S[k] = Math.min(1, this.arch[k] / P.seaRef) * 0.8; }
       this.C[k] = this.N[k] > 0 ? this.cxTarget(this.net.N[k], 1) : 0;
       this.CA[k] = this.A[k] > 0 ? this.cxTarget(this.net.A[k], this.ceilA[k]) : 0;
     }
@@ -163,6 +189,12 @@ export class LiveEngine {
     const near = w < 0.5 ? s : s + 1;
     if (near !== this.envSlice) {
       this.envSlice = near;
+      for (let k = 0; k < NC; k++) {
+        const q = d[(near * F + 2) * NC + k];
+        this.Pr[k] = q ? 10 ** (1 + ((q - 1) / 254) * (Math.log10(4000) - 1)) : 0;
+        const r = d[(near * F + 8) * NC + k];
+        this.river[k] = r >= 109 ? Math.min(1, (r - 109) / 120) : 0;
+      }
       this.flags.set(d.subarray((near * F + 6) * NC, (near * F + 7) * NC));
       this.conn.set(d.subarray((near * F + 7) * NC, (near * F + 8) * NC));
       this.archipelago();
@@ -272,7 +304,12 @@ export class LiveEngine {
       const nA = this.net.A[k], CAe = Math.max(this.CA[k], nA > 1e-6 ? this.net.ACA[k] / nA : 0);
       const base = this.K[k] * this.kmul[k];
       const cold = (c: number) => { const tmin = P.tMin - P.coldDelta * c; return Math.min(1, Math.max(0, (this.T[k] - tmin) / (P.tOk - tmin))); };
-      Ks[k] = base * cold(cE[k]) + P.farmDensity * AREA[k] * this.lf[k] * this.pot[k] * AgE[k] * this.kmul[k];
+      const tg = (id: string) => this.tech[TO[id] + k];
+      const wild = 1 + 0.15 * tg("bow") + 0.3 * tg("fishing") * Math.max(this.river[k], this.arch[k] > 0 ? 1 : 0)
+        + 0.5 * tg("herding") * this.steppe(k);
+      const farmBoost = 1 + 0.6 * tg("irrigation") * this.river[k] * Math.min(1, Math.max(0, (700 - this.Pr[k]) / 500))
+        + 0.4 * tg("plough") + 0.2 * tg("iron") + 0.3 * tg("mill") + 0.5 * tg("steam") + 0.5 * tg("electricity");
+      Ks[k] = base * wild * cold(cE[k]) + P.farmDensity * AREA[k] * this.lf[k] * this.pot[k] * AgE[k] * this.kmul[k] * farmBoost;
       Ka[k] = base * cold(0.4);
       const adv = Math.max(-0.5, Math.min(0.5, P.adv * (CE[k] - CAe)));
       loadS[k] = N[k] + (1 - adv) * A[k];
@@ -280,7 +317,8 @@ export class LiveEngine {
     }
     // 1. croissance
     for (let k = 0; k < NC; k++) {
-      N[k] = Ks[k] > 0 ? N[k] * Math.exp(Math.max(-3, Math.min(1, P.r * dt * (1 - loadS[k] / Ks[k])))) : N[k] * 0.5;
+      const storage = this.tech[TO.storage + k], med = this.tech[TO.medicine + k];
+      N[k] = Ks[k] > 0 ? N[k] * Math.exp(Math.max(-3 * (1 - 0.7 * storage), Math.min(1, P.r * (1 + med) * dt * (1 - loadS[k] / Ks[k])))) : N[k] * 0.5;
       A[k] = Ka[k] > 0 ? A[k] * Math.exp(Math.max(-3, Math.min(1, P.r * dt * (1 - loadA[k] / Ka[k])))) : A[k] * 0.5;
     }
     // 2. migration (sapiens : à pied, détroits et sauts d'une cellule d'eau si savoir maritime)
@@ -317,7 +355,7 @@ export class LiveEngine {
         const tC = this.cxTarget(net, 1);
         this.C[k] += (tC - this.C[k]) * (tC > this.C[k] ? kg : kl);
         const big = net >= P.coldNcrit;
-        if (big && this.T[k] < P.tOk + 5) this.c[k] += P.coldGain * this.C[k] * dt * (1 - this.c[k]);
+        if (big && this.T[k] < P.tOk + 5) this.c[k] += P.coldGain * this.C[k] * (1 + 2 * this.tech[TO.sewing + k]) * dt * (1 - this.c[k]);
         if (!big) this.c[k] -= P.coldLoss * dt * this.c[k];
         const tS = Math.min(1, this.arch[k] / P.seaRef) * this.C[k];
         this.S[k] += (tS - this.S[k]) * (tS > this.S[k] ? sg : sl);
@@ -339,7 +377,93 @@ export class LiveEngine {
       }
     }
     this.year += dt;
-    if (this.steps % 25 === 1) this.identifyPeoples();
+    if (this.steps % 5 === 0) this.updateTechs(100);
+    if (this.steps % 25 === 1) { this.identifyPeoples(); this.updateSettlements(); }
+  }
+
+  steppe(k: number) {
+    const p = this.Pr[k];
+    return this.T[k] > -2 && p > 200 && p < 750 ? Math.min(1, (p - 200) / 150, (750 - p) / 150) : 0;
+  }
+
+  /** Savoirs : invention là où tout s'y prête, développement, diffusion entre voisins, oubli. */
+  updateTechs(dt: number) {
+    const agriIdx = TECH_INDEX.get("agri")!;
+    const sci = TECH_INDEX.get("science")!, print = TECH_INDEX.get("printing")!;
+    // maîtrise de l'agriculture : rapportée à ce que permet le milieu (0,35 ≈ pleinement agricole)
+    const m = (t: number, k: number) => (t === agriIdx ? Math.min(1, this.Ag[k] / 0.35) : this.tech[t * NC + k]);
+    const pre = TECHS.map((t) => t.pre.map((id) => TECH_INDEX.get(id)!));
+    const next = this.tech.slice();
+    for (let k = 0; k < NC; k++) {
+      const N = this.N[k];
+      if (N < 30) { for (let t = 0; t < NT; t++) next[t * NC + k] = 0; continue; }
+      const i = Math.floor(k / NX), j = k % NX;
+      const area = AREA[k] * Math.max(this.lf[k], 1e-3);
+      const ctx: Ctx = {
+        T: this.T[k], P: this.Pr[k], river: this.river[k], arch: this.arch[k], coast: this.lf[k] < 0.98 && this.lf[k] > 0.02,
+        ore: this.ore[k], steppe: this.steppe(k), density: N / area, net: this.net.N[k], C: this.C[k], agri: this.Ag[k], pop: N,
+      };
+      const speed = (1 + m(sci, k)) * (1 + m(print, k));
+      for (let t = 0; t < NT; t++) {
+        const tech = TECHS[t];
+        if (t === agriIdx || tech.rate === 0) continue;
+        const cur = this.tech[t * NC + k];
+        let ok = 1;
+        for (const q of pre[t]) ok = Math.min(ok, m(q, k));
+        let v = cur;
+        // 1. invention : préalables maîtrisés × opportunité × savoir-faire × taille du réseau
+        if (cur < 0.05 && ok >= 0.4) {
+          const pr = tech.rate * [1, 6, 3, 2.5, 3][tech.era] * dt * speed * tech.cond(ctx) * this.C[k] * Math.min(1, ctx.net / Math.max(1, tech.minNet));
+          if (this.rand() < pr) {
+            v = 0.2;
+            if (!this.techFirst[t]) {
+              const ppl = this.peoples[this.peopleIdx[k] - 1];
+              this.techFirst[t] = { year: this.year, where: ppl ? `les ${ppl.name}` : `${(90 - i - 0.5).toFixed(0)}°, ${(-180 + j + 0.5).toFixed(0)}°` };
+              this.events.push({ year: this.year, text: `Invention : ${tech.name.toLowerCase()} (${this.techFirst[t]!.where})` });
+            }
+          }
+        }
+        // 2. diffusion : on apprend d'un voisin qui maîtrise mieux, si on en a les préalables
+        if (ok >= 0.3) {
+          let best = 0;
+          for (const [di, dj, b] of [[-1, 0, 1], [1, 0, 6], [0, -1, 3], [0, 1, 4]] as const) {
+            const ii = i + di; if (ii < 0 || ii >= NY || !((this.conn[k] >> b) & 1)) continue;
+            const kk = ii * NX + ((j + dj + NX) % NX);
+            if (this.N[kk] >= 30) best = Math.max(best, this.tech[t * NC + kk]);
+          }
+          if (best > v) v += (best - v) * Math.min(1, (dt / 300) * speed);
+        }
+        // 3. développement local, ou oubli si le réseau est trop petit pour entretenir le savoir
+        if (v > 0) {
+          const need = tech.minNet;
+          if (ctx.net >= need) v += (1 - v) * Math.min(1, (0.3 * dt) / 100);
+          else v -= v * Math.min(1, ((0.25 * dt) / 100) * (1 - ctx.net / Math.max(1, need)));
+        }
+        next[t * NC + k] = Math.max(0, Math.min(1, v));
+      }
+    }
+    this.tech = next;
+  }
+
+  /** Âge atteint par une cellule, d'après ses savoirs (et non plus d'après sa taille). */
+  ageOf(k: number) {
+    const g = (id: string) => this.tech[TECH_INDEX.get(id)! * NC + k];
+    if (g("steam") >= 0.5 || g("electricity") >= 0.5) return 4;
+    if (g("iron") >= 0.5 && g("law") >= 0.5) return 3;
+    if (g("writing") >= 0.5) return 2;
+    return this.Ag[k] > 0.15 ? 1 : 0;
+  }
+
+  /** G4 : villages, territoires et échelons politiques, à partir des agriculteurs simulés. */
+  updateSettlements() {
+    const farmers = new Float32Array(NC);
+    for (let k = 0; k < NC; k++) farmers[k] = this.Ag[k] > 0.3 ? this.N[k] * this.Ag[k] : 0;
+    this.settlements.update(this.year, farmers, this.peopleIdx,
+      (idx) => (idx ? this.peoples[idx - 1]?.color ?? null : null),
+      (idx) => (idx ? this.peoples[idx - 1]?.id ?? 0 : 0), farmers,
+      (k) => this.ageOf(k),
+      (k) => 1 + 0.5 * (this.tech[TECH_INDEX.get("wheel")! * NC + k] + this.tech[TECH_INDEX.get("roads")! * NC + k] + this.tech[TECH_INDEX.get("law")! * NC + k]));
+    for (const e of this.settlements.events.splice(0)) this.events.push({ year: e.year, text: e.text, settlement: e.settlement });
   }
 
   /** Regroupe les cellules voisines aux marqueurs proches en peuples, et suit leur identité dans le temps
@@ -432,7 +556,8 @@ export class LiveEngine {
     for (let i = 0; i < NY; i++) for (let j = 0; j < NX; j++) {
       const k = i * NX + j;
       if (X[k] <= 0) continue;
-      const boats = sea ? Math.min(1, Math.max(0, (sea[k] - P.boatS) / (1 - P.boatS))) : 0;
+      const tb = (id: string) => this.tech[TO[id] + k];
+      const boats = sea ? Math.max(Math.min(1, Math.max(0, (sea[k] - P.boatS) / (1 - P.boatS))), 0.6 * tb("canoe"), 0.85 * tb("sail"), tb("compass")) : 0;
       let W = 0, n = 0;
       for (let b = 0; b < 8; b++) {
         const [di, dj] = DIRS[b];
@@ -450,7 +575,8 @@ export class LiveEngine {
       }
       if (W <= 0) continue;
       const pressure = K[k] > 0 ? Math.min(3, load[k] / K[k]) : 3;
-      const out = X[k] * Math.min(0.5, (P.mBase + P.mPress * pressure) * dt);
+      const move = sea ? 1 + 0.3 * this.tech[TO.wheel + k] + 0.3 * this.tech[TO.roads + k] : 1;
+      const out = X[k] * Math.min(0.5, (P.mBase + P.mPress * pressure) * dt * move);
       dX[k] -= out;
       traits.forEach((Tr, t) => { dT[t][k] -= out * Tr[k]; });
       for (let q = 0; q < n; q++) {

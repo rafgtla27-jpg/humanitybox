@@ -13,9 +13,10 @@ import { RAMPS } from "./paint";
 import { H, W, type Relief } from "./relief";
 
 export const LAYER_INDEX: Record<Layer, number> = {
-  humans: 0, temperature: 1, precipitation: 2, npp: 3, cold: 4, complexity: 5, sea: 6, agri: 7, peoples: 8,
+  humans: 0, temperature: 1, precipitation: 2, npp: 3, cold: 4, complexity: 5, sea: 6, agri: 7, tech: 8, peoples: 10,
+  villages: 11, groups: 11, realms: 11,
 };
-const RAMP_ORDER: Exclude<Layer, "humans" | "peoples">[] = ["temperature", "precipitation", "npp", "cold", "complexity", "sea", "agri"];
+const RAMP_ORDER: Exclude<Layer, "humans" | "peoples" | "villages" | "groups" | "realms">[] = ["temperature", "precipitation", "npp", "cold", "complexity", "sea", "agri", "tech"];
 
 export type FrameTextures = { sim1: Uint8Array; sim2: Uint8Array; sim3: Uint8Array; seaLevel: number; people?: Uint8Array; palette?: Uint8Array };
 
@@ -88,6 +89,8 @@ const fragmentShader = /* glsl */ `
   uniform sampler2D uRamp;
   uniform sampler2D uPeople;   // index du peuple (0 = aucun)
   uniform sampler2D uPalette;  // couleur de chaque peuple
+  uniform sampler2D uTerr;     // territoires à 0,5° : identifiant sur deux octets
+  uniform sampler2D uTerrPal;  // couleur de chaque territoire
   uniform float uSea;
   uniform int uLayer;
   varying vec2 vUv;
@@ -113,7 +116,7 @@ const fragmentShader = /* glsl */ `
       col = vec3(0.93, 0.96, 0.97) * shade;
     } else {
       float q;
-      if (uLayer == 0 || uLayer == 8) {
+      if (uLayer == 0 || uLayer == 10 || uLayer == 11) {
         float T = -40.0 + 75.0 * (s1.r * 255.0 - 1.0) / 254.0;
         float P = pow(10.0, 1.0 + ((s1.g * 255.0 - 1.0) / 254.0) * (log(4000.0) / log(10.0) - 1.0));
         float npp = 3000.0 * pow((s1.b * 255.0 - 1.0) / 254.0, 2.0);
@@ -129,7 +132,22 @@ const fragmentShader = /* glsl */ `
           float checker = mod(tile.x + tile.y, 2.0) > 0.5 ? 0.9 : 1.05;
           col = mix(col, vec3(0.79, 0.75, 0.42) * checker, 0.32 * farm);
         }
-        if (uLayer == 8) {
+        if (uLayer == 11) {
+          // voile transparent aux couleurs de chaque territoire, frontières soulignées
+          vec4 tt = texture2D(uTerr, uv);
+          float id = floor(tt.r * 255.0 + 0.5) * 256.0 + floor(tt.g * 255.0 + 0.5);
+          if (id > 0.5) {
+            vec3 tc = texture2D(uTerrPal, vec2((mod(id, 2048.0) + 0.5) / 2048.0, 0.5)).rgb;
+            col = mix(col, tc, 0.42);
+            vec2 px = vec2(1.0 / 720.0, 1.0 / 360.0);
+            vec4 ta = texture2D(uTerr, uv + vec2(px.x, 0.0)), tb = texture2D(uTerr, uv + vec2(0.0, px.y));
+            float ia = floor(ta.r * 255.0 + 0.5) * 256.0 + floor(ta.g * 255.0 + 0.5);
+            float ib = floor(tb.r * 255.0 + 0.5) * 256.0 + floor(tb.g * 255.0 + 0.5);
+            vec2 f = fract(uv / px);
+            if ((ia != id && f.x > 0.75) || (ib != id && f.y > 0.75)) col = mix(col, tc * 0.5, 0.8);
+          }
+        }
+        if (uLayer == 10) {
           float id = floor(texture2D(uPeople, uv).r * 255.0 + 0.5);
           if (id > 0.5) {
             vec3 pc = texture2D(uPalette, vec2((id + 0.5) / 256.0, 0.5)).rgb;
@@ -145,8 +163,8 @@ const fragmentShader = /* glsl */ `
       } else {
         int row = uLayer - 1;
         if (row <= 2) q = row == 0 ? s1.r : row == 1 ? s1.g : s1.b;
-        else if (row == 3) q = s3.r; else if (row == 4) q = s3.g; else if (row == 5) q = s3.b; else q = s2.b;
-        col = q > 0.003 ? texture2D(uRamp, vec2(q, (float(row) + 0.5) / 7.0)).rgb : vec3(0.36, 0.33, 0.29);
+        else if (row == 3) q = s3.r; else if (row == 4) q = s3.g; else if (row == 5) q = s3.b; else if (row == 6) q = s2.b; else q = s3.a;
+        col = q > 0.003 ? texture2D(uRamp, vec2(q, (float(row) + 0.5) / 8.0)).rgb : vec3(0.36, 0.33, 0.29);
       }
       col *= shade;
       if (s2.a > 0.43) col = mix(col, vec3(0.35, 0.64, 0.81), 0.35 + 0.4 * clamp((s2.a - 0.43) / 0.5, 0.0, 1.0));
@@ -171,6 +189,8 @@ export class GlobeMaterial {
   private sim2 = simTexture();
   private sim3 = simTexture();
   private people = (() => { const t = simTexture(); t.magFilter = THREE.NearestFilter; t.minFilter = THREE.NearestFilter; return t; })();
+  private terr = (() => { const t = new THREE.DataTexture(new Uint8Array(720 * 360 * 4), 720, 360, THREE.RGBAFormat); t.magFilter = THREE.NearestFilter; t.minFilter = THREE.NearestFilter; t.wrapS = THREE.RepeatWrapping; t.needsUpdate = true; return t; })();
+  private terrPal = (() => { const t = new THREE.DataTexture(new Uint8Array(2048 * 4), 2048, 1, THREE.RGBAFormat); t.magFilter = THREE.NearestFilter; t.minFilter = THREE.NearestFilter; t.needsUpdate = true; return t; })();
   private palette = (() => { const t = new THREE.DataTexture(new Uint8Array(256 * 4), 256, 1, THREE.RGBAFormat); t.magFilter = THREE.NearestFilter; t.minFilter = THREE.NearestFilter; t.needsUpdate = true; return t; })();
 
   constructor(relief: Relief) {
@@ -179,7 +199,7 @@ export class GlobeMaterial {
       uniforms: {
         uRelief: { value: reliefTexture(relief) }, uRamp: { value: rampTexture() },
         uSim1: { value: this.sim1 }, uSim2: { value: this.sim2 }, uSim3: { value: this.sim3 },
-        uSea: { value: 0 }, uLayer: { value: 0 }, uPeople: { value: this.people }, uPalette: { value: this.palette },
+        uSea: { value: 0 }, uLayer: { value: 0 }, uPeople: { value: this.people }, uPalette: { value: this.palette }, uTerr: { value: this.terr }, uTerrPal: { value: this.terrPal },
       },
     });
   }
@@ -200,6 +220,15 @@ export class GlobeMaterial {
     this.material.uniforms.uLayer.value = LAYER_INDEX[layer];
   }
 
+  /** Territoires de l'échelon affiché : identifiant par parcelle de 0,5° et palette. */
+  setTerritory(index: Uint16Array, palette: Uint8Array) {
+    const d = this.terr.image.data as Uint8Array;
+    for (let k = 0; k < index.length; k++) { d[k * 4] = index[k] >> 8; d[k * 4 + 1] = index[k] & 255; }
+    this.terr.needsUpdate = true;
+    (this.terrPal.image.data as Uint8Array).set(palette.subarray(0, 2048 * 4));
+    this.terrPal.needsUpdate = true;
+  }
+
   dispose() {
     for (const t of [this.sim1, this.sim2, this.sim3, this.material.uniforms.uRelief.value, this.material.uniforms.uRamp.value]) t.dispose();
     this.material.dispose();
@@ -218,7 +247,7 @@ export function frameTexturesFromRun(data: RunData, frame: number, seaLevel: num
     return k >= 0 && data.extra ? data.extra.subarray(frame * nExtra * plane + k * plane, frame * nExtra * plane + (k + 1) * plane) : null;
   };
   const sim1 = new Uint8Array(plane * 4), sim2 = new Uint8Array(plane * 4), sim3 = new Uint8Array(plane * 4);
-  const agri = ex("agri"), riv = ex("rivers"), cold = ex("cold"), cx = ex("complexity"), sea = ex("sea");
+  const agri = ex("agri"), riv = ex("rivers"), cold = ex("cold"), cx = ex("complexity"), sea = ex("sea"), tech = ex("tech");
   for (let k = 0; k < plane; k++) {
     if (clim) { sim1[k * 4] = clim[k]; sim1[k * 4 + 1] = clim[plane + k]; sim1[k * 4 + 2] = clim[2 * plane + k]; }
     sim1[k * 4 + 3] = base[k] & 2 ? 255 : 0;
@@ -229,6 +258,7 @@ export function frameTexturesFromRun(data: RunData, frame: number, seaLevel: num
     if (cold) sim3[k * 4] = cold[k];
     if (cx) sim3[k * 4 + 1] = cx[k];
     if (sea) sim3[k * 4 + 2] = sea[k];
+    if (tech) sim3[k * 4 + 3] = tech[k];
   }
   dilateClimate(sim1, nx, ny);
   const people = ex("people") ?? undefined;

@@ -589,3 +589,64 @@ Premier essai : à −113 000, l'Afrique formait encore un seul grand peuple ; s
 resserré (0,07 → 0,045) et structure africaine initiale plus marquée pour faire apparaître
 plusieurs peuples africains dès le départ (réglage de jeu, non vérifié en test après coup).
 Défaut vu : Madagascar peuplée dès ~113k (traversée trop facile) — à revoir avec la navigation.
+
+**0.9.0 — G4 : villages, territoires, échelons politiques et villages de cœur**
+Correction de cap (utilisateur) : le « cœur » se porte sur des VILLAGES, choisis librement par le
+joueur, un ou plusieurs ; rien n'est attribué d'office. Les échelons politiques doivent se
+distinguer selon les âges, chacun avec son architecture.
+- Villages = entités durables (`web/lib/live/settlements.ts`) : fondés là où les agriculteurs sont
+  assez nombreux et loin d'un village existant, nommés, rattachés à leur peuple, qui grandissent,
+  déclinent ou sont abandonnés. Territoire = parcelles de 0,5° habitées rattachées au village le plus
+  proche (≤ 2,5°).
+- Échelons : regroupement autour des plus grands villages d'un même peuple (≈ 4° puis ≈ 11°).
+- Âges atteints par chaque ensemble, selon sa taille, sa plus grande ville et son ancienneté (aucune
+  date imposée) : Néolithique → Âge des cités → Âge des royaumes → Âge moderne. Les noms des
+  échelons en dépendent : village / chefferie / confédération ; ville / cité-État / royaume ;
+  ville / comté / royaume ; commune / département / pays. Seuils à l'échelle du modèle (≈ 30 M
+  d'humains aujourd'hui) : 40 000 hab. et une ville de 4 000 pour les cités ; 150 000 et 2 500 ans
+  pour les royaumes ; 600 000 et 6 000 ans pour l'âge moderne.
+- Test sans interface (Node, partie lancée à −12 000) : 883 villages, 295 échelons intermédiaires,
+  151 ensembles supérieurs à l'époque actuelle, dont 137 néolithiques, 12 à l'âge des cités, 2 à
+  l'âge des royaumes, aucun moderne (atteignable par les pouvoirs).
+- Architecture par âge : huttes et maisons longues ; maisons de pierre aux toits de tuiles et temple
+  à degrés ; remparts à tours et donjon à bannière ; immeubles.
+- Interface : calques « Territoires » (villages, échelon 2, échelon 3) en voile transparent aux
+  couleurs de chaque territoire, avec frontières ; noms posés sur le globe (ensembles de loin,
+  villages de près, sans chevauchement) ; clic sur un territoire ou un nom → fiche du village
+  (type, âge, fondation, habitants, peuple, chef-lieu, capitale, histoire) ; « Prendre ce village à
+  cœur » (plusieurs possibles) → pastilles en haut à gauche, ♥ dans la chronique.
+- Nouvelle partie « depuis −12 000 ans » (monde déjà peuplé), proposée par défaut pour voir vite
+  villages et royaumes ; la partie depuis −120 000 ans reste disponible.
+Limites : un village a la population de sa cellule de 1° (exagération assumée du jeu) ; les échelons
+sont recalculés tous les 500 ans par regroupement géographique, pas encore par conquête ou alliance
+(la guerre reste à faire) ; l'âge moderne n'a pas encore de « région » entre département et pays.
+
+**0.10.0 — graphe des savoirs (monde vivant)**
+Demande : « un tech tree fin, là on a zéro évolution ». Réponse fidèle aux principes : pas un arbre
+à points, un GRAPHE DE SAVOIRS porté par les populations (roadmap : culture cumulative, cognition
+par préconditions, oubli technologique).
+- 32 savoirs en 5 âges (`web/lib/live/techs.ts`) : feu, pierre taillée, aiguille, arc, pêche,
+  pirogue, poterie ; agriculture, élevage, greniers, tissage, irrigation, araire, roue, cuivre ;
+  bronze, écriture, voile, calendrier, monnaie ; fer, routes, droit, ingénierie, moulin, navigation
+  hauturière ; imprimerie, poudre, science, médecine, machine à vapeur, électricité.
+- Chaque savoir naît là où ses préalables sont maîtrisés, où le milieu s'y prête (minerai dans les
+  reliefs, fleuve en zone sèche pour l'irrigation, steppe pour l'élevage, archipel pour la pirogue,
+  froid pour l'aiguille) et où le besoin ou la densité l'appellent ; il se transmet entre voisins
+  reliés à pied, se développe si le réseau social est assez grand, et se PERD sinon.
+- Effets par les causes du modèle : ressources sauvages (arc, pêche, élevage), récoltes (irrigation,
+  araire, fer, moulin, vapeur, électricité), famines amorties (greniers), croissance (médecine),
+  adaptation au froid (aiguille), traversées (pirogue, voile, navigation), déplacements (roue,
+  routes), portée des ensembles politiques (roue, routes, droit).
+- Les âges ne dépendent plus de la taille mais des savoirs : écriture → âge des cités ; fer + droit
+  → âge des royaumes ; vapeur ou électricité → âge moderne. L'architecture suit.
+- Minerais : générés à partir du relief (pas de données géologiques) ; logique de jeu assumée.
+Essais (Node, depuis −12 000) : un monde a tout inventé jusqu'à l'électricité (écriture 7 900 BP,
+fer 6 000, imprimerie 3 100, vapeur 1 300, électricité 1 000 ; trop rapide de 2 à 3 fois par rapport à
+l'histoire réelle) ; un autre, après rééquilibrage, s'est arrêté avant l'imprimerie. Cette
+contingence est voulue : certains mondes atteignent l'âge moderne, d'autres non, et les pouvoirs
+du joueur peuvent les y aider. Des savoirs sont inventés puis oubliés (routes, bronze).
+Interface : bouton « Arbre des savoirs » (5 colonnes par âge, préalables, inventeurs, part de
+l'humanité qui maîtrise chaque savoir, « puis oublié ») ; savoirs du village sélectionné ; calque
+« Niveau technique ».
+Coût : ≈ 80 ms par pas de 20 ans dans Node (contre ≈ 45 ms avant) : le moteur ralentit ; optimisation
+à prévoir.

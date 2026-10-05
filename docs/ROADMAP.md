@@ -90,7 +90,7 @@ Ce qu'on garde de WORLD_SIM : un monde réel et des causes logiques ; le joueur 
 - **G3 — Peuples émergents et peuple de cœur** (fait, 0.8.0, monde vivant) : un trait culturel neutre qui dérive et se mélange
   regroupe les cohortes en peuples (nom, couleur, bannière) ; le joueur s'attache à un peuple, le
   suit, reçoit sa chronique (premier village, famine, migration, rencontre).
-- **G4 — Villages, royaumes, guerres** : V0.6–V0.8 de la roadmap, vus comme un jeu.
+- **G4 — Villages, royaumes, guerres** (0.9.0 : villages durables, territoires, échelons par âge, architecture par âge, villages de cœur ; à faire : guerres, alliances, conquêtes, échelon « région ») : V0.6–V0.8 de la roadmap, vus comme un jeu.
 
 ### Piste sprites (personnages à l'écran)
 
@@ -187,7 +187,7 @@ planètes procédurales plutôt que simulé en continu.
 |---|---|---|
 | Cognition par préconditions (agriculture, poterie), pas d'arbre technologique | V0.4–V0.5 | — |
 | Culture cumulative : inventer, imiter, mal copier, améliorer, combiner, oublier | V0.4 | premier trait (froid) ✅ |
-| Graphe de connaissances dynamique (recombinaisons, outil composite) | V0.4 | — |
+| Graphe de connaissances dynamique (recombinaisons, outil composite) | V0.4 | ✅ monde vivant 0.10.0 : 32 savoirs, préalables, milieu, besoin, diffusion, oubli |
 | Oubli technologique (praticiens → 0) | V0.3–V0.4 | ✅ pour l'adaptation au froid |
 | Innovation = recherche dans un espace de solutions, évolution darwinienne des objets (Tool{material, geometry…}) | V0.4 → V1.0 | — |
 | Énergie par capita comme fil conducteur (muscle → bois → animal → vent/eau → charbon → pétrole → atome) | V0.6 → V1.0 | — |
