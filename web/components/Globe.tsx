@@ -4,7 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { Bands } from "@/lib/bands";
-import { H as RH, W as RW, loadRelief, paintRelief, seaLevelAt, type Relief } from "@/lib/relief";
+import { H as RH, W as RW, loadRelief, seaLevelAt, type Relief } from "@/lib/relief";
+import { GlobeMaterial, frameTexturesFromRun } from "@/lib/globeMaterial";
 import { paintFrame, type Layer, type RunData } from "@/lib/paint";
 
 type Props = {
@@ -18,6 +19,10 @@ type Props = {
   /** Silhouettes de groupes humains (calque Humains uniquement) */
   sprites?: boolean;
   onSpriteScale?: (peoplePerSprite: number) => void;
+  /** Clic sur le globe (sans glisser) : latitude, longitude — pour les pouvoirs divins */
+  onPick?: (lat: number, lon: number) => void;
+  /** Identité de la scène : la scène 3D n'est recréée que si elle change (monde vivant : constante) */
+  sceneKey?: string;
 };
 
 /** Champ d'étoiles fixe (générateur pseudo-aléatoire déterministe). */
@@ -53,7 +58,15 @@ function directionFor(lonDeg: number, latDeg: number) {
   return new THREE.Vector3(Math.cos(lat) * Math.cos(lon), Math.sin(lat), -Math.cos(lat) * Math.sin(lon));
 }
 
-export default function Globe({ data, frame, layer, space = false, className = "globe", onError, sprites = false, onSpriteScale }: Props) {
+export default function Globe({ data, frame, layer, space = false, className = "globe", onError, sprites = false, onSpriteScale, onPick, sceneKey }: Props) {
+  const dataRef = useRef(data);
+  dataRef.current = data;
+  const onPickRef = useRef(onPick);
+  onPickRef.current = onPick;
+  const gpuRef = useRef<GlobeMaterial | null>(null);
+  const globeRef = useRef<THREE.Mesh | null>(null);
+  const lastBands = useRef(0);
+  const key = sceneKey ?? `${data.manifest.experiment_id}|${data.manifest.label}|${data.manifest.seed}|${data.manifest.engine_version}`;
   const mountRef = useRef<HTMLDivElement>(null);
   const frameRef = useRef(frame);
   frameRef.current = frame;
@@ -81,7 +94,7 @@ export default function Globe({ data, frame, layer, space = false, className = "
       onError?.("WebGL est indisponible dans ce navigateur. Activez l'accélération matérielle ou essayez un autre navigateur.");
       return;
     }
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     mount.appendChild(renderer.domElement);
 
@@ -92,8 +105,8 @@ export default function Globe({ data, frame, layer, space = false, className = "
     const canvas = document.createElement("canvas");
     // Taille fixée une fois pour toutes (une texture WebGL ne change pas de taille) :
     // carte détaillée en mode espace, grille de simulation sinon.
-    canvas.width = space ? RW : nx;
-    canvas.height = space ? RH : ny;
+    canvas.width = nx; // en mode espace le rendu passe par la carte graphique ; ce canevas ne sert qu’au repli
+    canvas.height = ny;
     const texture = new THREE.CanvasTexture(canvas);
     texture.colorSpace = THREE.SRGBColorSpace;
     texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
@@ -102,6 +115,22 @@ export default function Globe({ data, frame, layer, space = false, className = "
 
     const material = space ? new THREE.MeshLambertMaterial({ map: texture }) : new THREE.MeshBasicMaterial({ map: texture });
     const globe = new THREE.Mesh(new THREE.SphereGeometry(1, 192, 128), material);
+    globeRef.current = globe;
+    // Clic sans glisser → point visé sur le globe
+    let downAt: [number, number] | null = null;
+    const raycaster = new THREE.Raycaster();
+    const onDown = (e: PointerEvent) => { downAt = [e.clientX, e.clientY]; };
+    const onUp = (e: PointerEvent) => {
+      if (!downAt || Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]) > 5 || !onPickRef.current) return;
+      const r = renderer.domElement.getBoundingClientRect();
+      raycaster.setFromCamera(new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1), camera);
+      const hit = raycaster.intersectObject(globe)[0];
+      if (!hit) return;
+      const v = hit.point.clone().normalize();
+      onPickRef.current((Math.asin(v.y) * 180) / Math.PI, (Math.atan2(-v.z, v.x) * 180) / Math.PI);
+    };
+    renderer.domElement.addEventListener("pointerdown", onDown);
+    renderer.domElement.addEventListener("pointerup", onUp);
     scene.add(globe);
     let stars: THREE.Points | null = null;
     if (space) {
@@ -150,7 +179,8 @@ export default function Globe({ data, frame, layer, space = false, className = "
       if (d < 1.45) {
         const v = camera.position.clone().normalize();
         const rel = reliefRef.current;
-        const sea = seaLevelAt(data, data.manifest.frames.years[frameRef.current]);
+        const dd = dataRef.current;
+        const sea = seaLevelAt(dd, dd.manifest.frames.years[frameRef.current]);
         focus = {
           lat: (Math.asin(v.y) * 180) / Math.PI,
           lon: (Math.atan2(-v.z, v.x) * 180) / Math.PI,
@@ -165,7 +195,8 @@ export default function Globe({ data, frame, layer, space = false, className = "
             : undefined,
         };
       }
-      onSpriteScale?.(bands.update(data, frameRef.current, focus));
+      lastBands.current = performance.now();
+      onSpriteScale?.(bands.update(dataRef.current, frameRef.current, focus));
     };
     refreshRef.current = refresh;
     controls.addEventListener("end", refresh);
@@ -233,34 +264,46 @@ export default function Globe({ data, frame, layer, space = false, className = "
       renderer.dispose();
       mount.removeChild(renderer.domElement);
       paintRef.current = null;
+      gpuRef.current?.dispose();
+      gpuRef.current = null;
+      globeRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data, space, sprites]);
+  }, [key, space, sprites]);
 
-  // Mise à jour de la texture quand la frame ou le calque change
+  // Rendu sur la carte graphique dès que le relief est chargé (mode espace)
+  useEffect(() => {
+    if (!space || !relief || !globeRef.current) return;
+    const gm = new GlobeMaterial(relief);
+    const old = globeRef.current.material as THREE.Material;
+    globeRef.current.material = gm.material;
+    old.dispose();
+    gpuRef.current = gm;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [relief, space, key]);
+
+  // Mise à jour à chaque image : quelques petites textures envoyées à la carte graphique
+  const bandsTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   useEffect(() => {
     const p = paintRef.current;
     if (!p) return;
-    const ctx = p.canvas.getContext("2d")!;
-    if (relief && p.canvas.width === RW) {
-      // Carte détaillée : relief 15′, côtes dynamiques, biomes, champs, lavis humain
-      const img = ctx.createImageData(RW, RH);
-      paintRelief(relief, data, frame, layer, img.data);
-      ctx.putImageData(img, 0, 0);
-    } else {
+    const gm = gpuRef.current;
+    if (gm) {
+      gm.set(frameTexturesFromRun(data, frame, seaLevelAt(data, data.manifest.frames.years[frame])), layer);
+    } else if (!space) {
+      const ctx = p.canvas.getContext("2d")!;
       const { nx, ny } = data.manifest.grid;
-      const small = document.createElement("canvas");
-      small.width = nx;
-      small.height = ny;
-      const sctx = small.getContext("2d")!;
-      const img = sctx.createImageData(nx, ny);
+      const img = ctx.createImageData(nx, ny);
       paintFrame(data, frame, layer, img.data, 0, undefined, { naturalGround: !!p.bands });
-      sctx.putImageData(img, 0, 0);
-      ctx.imageSmoothingEnabled = false;
-      ctx.drawImage(small, 0, 0, p.canvas.width, p.canvas.height);
+      ctx.putImageData(img, 0, 0);
+      p.texture.needsUpdate = true;
     }
-    p.texture.needsUpdate = true;
-    if (p.bands) refreshRef.current();
+    // Les villages ne sont reconstruits qu'au plus toutes les 0,7 s (et seulement en vue rapprochée)
+    if (p.bands) {
+      clearTimeout(bandsTimer.current);
+      const wait = Math.max(0, 700 - (performance.now() - lastBands.current));
+      bandsTimer.current = setTimeout(() => refreshRef.current(), wait);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data, frame, layer, relief]);
 

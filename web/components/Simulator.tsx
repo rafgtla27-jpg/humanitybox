@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { listRuns, loadRun, type RunRef } from "@/lib/data";
+import { useLive } from "@/lib/live/useLive";
 import { RAMPS, availableLayers, legendFor, type Layer, type RunData } from "@/lib/paint";
 
 const Globe = dynamic(() => import("./Globe"), { ssr: false, loading: () => <div className="sim-loading" aria-hidden /> });
@@ -13,9 +14,25 @@ const IDLE_MS = 3200;
 
 type Menu = null | "layers" | "runs";
 
+const LIVE: RunRef = { key: "live", title: "Monde vivant — joue les dieux", detail: "le moteur tourne dans ton navigateur ; clique sur le globe pour agir", manifestUrl: "", baseUrl: "" };
+
+type PowerId = "drought" | "bless" | "plague" | "spawn" | "cold" | "boats";
+const POWERS: { id: PowerId; label: string; icon: string }[] = [
+  { id: "bless", label: "Bénédiction de fertilité", icon: "🌾" },
+  { id: "drought", label: "Sécheresse", icon: "☀️" },
+  { id: "cold", label: "Grand froid", icon: "❄️" },
+  { id: "plague", label: "Épidémie", icon: "☠️" },
+  { id: "spawn", label: "Faire naître un peuple", icon: "👣" },
+  { id: "boats", label: "Offrir les embarcations", icon: "⛵" },
+];
+const SPEEDS = [{ v: 200, l: "×1" }, { v: 800, l: "×4" }, { v: 2500, l: "×12" }];
+
 export default function Simulator() {
   const [runs, setRuns] = useState<RunRef[]>([]);
-  const [active, setActive] = useState<string | null>(null);
+  const [active, setActive] = useState<string | null>("live");
+  const [power, setPower] = useState<PowerId | null>(null);
+  const isLive = active === "live";
+  const live = useLive(isLive);
   const [data, setData] = useState<RunData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [frame, setFrame] = useState(0);
@@ -30,16 +47,14 @@ export default function Simulator() {
   useEffect(() => {
     listRuns()
       .then((r) => {
-        setRuns(r);
-        if (r.length) setActive(r[0].key);
-        else setError("Aucun run disponible.");
+        setRuns([LIVE, ...r]);
       })
       .catch((e) => setError(String(e.message ?? e)));
   }, []);
 
   useEffect(() => {
     const ref = runs.find((r) => r.key === active);
-    if (!ref) return;
+    if (!ref || ref.key === "live") return;
     setData(null);
     setPlaying(false);
     loadRun(ref)
@@ -78,7 +93,7 @@ export default function Simulator() {
     wake();
     return () => clearTimeout(idle.current);
   }, [wake]);
-  const visible = awake || menu !== null || !data;
+  const visible = awake || menu !== null || !(isLive ? live.data : data) || power !== null;
 
   const toggle = useCallback(() => {
     if (!n) return;
@@ -101,14 +116,20 @@ export default function Simulator() {
     } else if (e.key === "Escape") setMenu(null);
   };
 
-  const year = data?.manifest.frames.years[frame];
+  const shown = isLive ? live.data : data;
+  const shownFrame = isLive ? 0 : frame;
+  const year = shown?.manifest.frames.years[shownFrame];
 
   return (
     <main className="sim" onPointerMove={wake} onPointerDown={wake} onKeyDown={onKey} tabIndex={-1}>
-      {data && !error && (
-        <Globe data={data} frame={frame} layer={layer} space sprites onSpriteScale={setPerSprite} className="sim-globe" onError={setError} />
+      {shown && !error && (
+        <Globe
+          data={shown!} frame={shownFrame} layer={layer} space sprites onSpriteScale={setPerSprite} className="sim-globe" onError={setError}
+          sceneKey={isLive ? "live" : undefined}
+          onPick={isLive && power ? (lat, lon) => live.send({ type: "power", kind: power, lat, lon }) : undefined}
+        />
       )}
-      {!data && !error && <div className="sim-loading" aria-label="Chargement" />}
+      {!shown && !error && <div className="sim-loading" aria-label="Chargement" />}
       {error && <p className="sim-error" role="alert">{error}</p>}
 
       <div className={`hud ${visible ? "" : "hud-hidden"}`}>
@@ -149,7 +170,44 @@ export default function Simulator() {
           )}
         </nav>
 
-        {data && year !== undefined && (
+        {isLive && live.status && (
+          <>
+            <div className="powers" role="toolbar" aria-label="Pouvoirs divins">
+              {POWERS.map((p) => (
+                <button key={p.id} className="power" aria-pressed={power === p.id} title={p.label} aria-label={p.label}
+                  onClick={() => setPower(power === p.id ? null : p.id)}>
+                  <span aria-hidden>{p.icon}</span>
+                </button>
+              ))}
+              {power && <p className="power-hint">{POWERS.find((p) => p.id === power)?.label} : clique sur le globe</p>}
+            </div>
+            <div className="hud-bottom hud-live">
+              <button className="play-btn" aria-label={live.status.playing ? "Pause" : "Lecture"}
+                onClick={() => live.send({ type: live.status!.playing ? "pause" : "play" })}>
+                <svg viewBox="0 0 20 20" aria-hidden>
+                  {live.status.playing ? <><rect x="5" y="4" width="3.5" height="12" /><rect x="11.5" y="4" width="3.5" height="12" /></> : <path d="M6 4l10 6-10 6z" />}
+                </svg>
+              </button>
+              <div className="hud-year" aria-live="off">
+                {Math.abs(Math.round(live.status.year)).toLocaleString("fr-FR")} <span>ans avant nous</span>
+              </div>
+              <div className="speeds" role="group" aria-label="Vitesse">
+                {SPEEDS.map((sp) => (
+                  <button key={sp.v} aria-pressed={live.status!.yearsPerSecond === sp.v} onClick={() => live.send({ type: "speed", value: sp.v })}>{sp.l}</button>
+                ))}
+              </div>
+              <div className="hud-pop">{(live.status.sapiens / 1e6).toFixed(2).replace(".", ",")} M humains</div>
+            </div>
+            {live.events.length > 0 && (
+              <ol className="chronicle" aria-label="Chronique">
+                {live.events.slice(-5).map((e, i) => (
+                  <li key={`${e.year}-${i}`}><b>{Math.abs(Math.round(e.year)).toLocaleString("fr-FR")}</b> {e.text}</li>
+                ))}
+              </ol>
+            )}
+          </>
+        )}
+        {!isLive && data && year !== undefined && (
           <div className="hud-bottom">
             <button className="play-btn" onClick={toggle} aria-label={playing ? "Pause" : "Lecture"}>
               <svg viewBox="0 0 20 20" aria-hidden>

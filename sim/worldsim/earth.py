@@ -73,7 +73,8 @@ def climate_variability(year: int) -> float:
     forte pendant toute la dernière glaciation (événements de Dansgaard-Oeschger), faible pendant
     les interglaciaires stables (Éémien jusqu'à ~116k, Holocène depuis 11 700 ans). Les données
     Beyer, au pas de 1 000 à 2 000 ans, ne voient pas ces oscillations : on les ajoute ici."""
-    return 0.15 if (year >= -11_700 or year <= -116_000) else 1.0
+    # Fin de l'Éémien (120–116k) : interglaciaire finissant, déjà instable → pas d'exception ici.
+    return 0.15 if year >= -11_700 else 1.0
 
 
 def monsoon_index(year: int) -> float:

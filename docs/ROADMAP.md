@@ -80,11 +80,11 @@ Ce qu'on garde de WORLD_SIM : un monde réel et des causes logiques ; le joueur 
 
 - **G0 — Monde lisible** (fait, viewer 0.6.0–0.6.1 : + pixel art procédural, campements et villages générés depuis la simulation) : relief 15′, côtes dynamiques, biomes, champs,
   personnages procéduraux à l'échelle, niveau de détail en vue rapprochée.
-- **G1 — Moteur en direct** (prochain gros chantier) : aujourd'hui le site REJOUE des simulations
+- **G1 — Moteur en direct** (fait, 0.7.0 : environnement cuit + moteur TypeScript en Web Worker ; à optimiser) : aujourd'hui le site REJOUE des simulations
   calculées à l'avance ; un dieu doit pouvoir agir pendant que le monde tourne. Portage du moteur
   (grille 1°, cohortes) en TypeScript dans un Web Worker, ou Rust → WebAssembly, à quelques
   centaines d'années par seconde. Le moteur Python reste la référence pour les expériences.
-- **G2 — Pouvoirs divins** branchés sur les causes du modèle : sécheresse / pluie, coup de froid,
+- **G2 — Pouvoirs divins** (6 premiers pouvoirs en 0.7.0) branchés sur les causes du modèle : sécheresse / pluie, coup de froid,
   volcan, épidémie, bénédiction de fertilité, aimant divin (déplacer un groupe), faire naître un
   groupe, offrir une technique (feu, bateau, semence).
 - **G3 — Peuples émergents et peuple de cœur** : un trait culturel neutre qui dérive et se mélange

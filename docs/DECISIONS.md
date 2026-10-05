@@ -545,3 +545,27 @@ Le moteur en direct (G1) n'est pas commencé dans cette version : priorité donn
 Plan G1 : (1) « cuire » l'environnement (capacité d'accueil, passages, glaces, potentiel agricole,
 indice d'archipel) aux 72 tranches climatiques ; (2) porter la démographie, la migration et les
 traits culturels en TypeScript dans un Web Worker ; (3) brancher les premiers pouvoirs.
+
+**0.7.0 — performance et moteur en direct (piste G1, G2 commencée)**
+Performance : le globe était repeint en JavaScript (un million de pixels) à chaque image, d'où les
+saccades. Le rendu passe sur la carte graphique : le relief est envoyé une fois, puis seulement trois
+petites textures de 360×180 par image ; le shader calcule côtes, profondeurs, biomes, ombrage,
+champs, fleuves et présence humaine. Les villages ne sont reconstruits qu'au plus toutes les 0,7 s.
+Moteur en direct :
+1. `scripts/bake_live.py` « cuit » l'environnement avec le moteur Python de référence : 67 tranches
+   (pas de 2 000 ans, puis de 1 000 ans après −12 000), 9 octets par cellule (capacité, climat,
+   potentiel agricole, part de terre, glace, liens à pied, fleuves) → 5,9 Mo.
+2. `web/lib/live/engine.ts` : portage TypeScript de la partie humaine du scénario E (croissance,
+   migration à pied, par détroits et par sauts maritimes selon le savoir maritime, compétition avec
+   les archaïques par la complexité culturelle, froid, agriculture, hasard démographique, extinction
+   des réseaux trop petits). Tourne dans un Web Worker : la page reste fluide.
+   Simplifications : pas de sauts de pionniers lointains ; réseaux sociaux recalculés tous les 100 ans.
+3. Pouvoirs divins (G2), branchés sur les causes du modèle : bénédiction de fertilité (capacité × 1,8,
+   600 ans), sécheresse (× 0,25, 400 ans), grand froid (−8 °C, 500 ans), épidémie (−65 % sur place),
+   faire naître un peuple (1 500 personnes au répertoire riche), offrir les embarcations (savoir
+   maritime). Chronique des événements à l'écran.
+Mesure : ≈ 190 ans simulés par seconde dans le navigateur de test (processeur unique, rendu
+logiciel) ; nettement plus sur un ordinateur ordinaire. Optimisations possibles : flou séparable
+moins fréquent, WebAssembly.
+Correction : l'agriculture apparaissait à la fin de l'Éémien (−119 840, Afrique de l'Est) car ce
+dernier était traité comme stable ; il ne l'est plus (fin d'interglaciaire déjà instable).
