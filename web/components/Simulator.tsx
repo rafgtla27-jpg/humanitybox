@@ -43,6 +43,7 @@ export default function Simulator() {
   const isLive = active === "live" || active === "live-12k";
   const live = useLive(isLive, active === "live-12k" ? -12_000 : -120_000);
   const world = live.world;
+  const territoryVersion = useRef(0);
   const byId = useMemo(() => new Map(world.settlements.map((x, n) => [x.id, { s: x, n }])), [world]);
   const polById = useMemo(() => new Map(world.polities.map((p) => [p.id, p])), [world]);
   // Territoires de l'échelon affiché → identifiant compact par parcelle + palette
@@ -65,8 +66,11 @@ export default function Simulator() {
     };
     const index = new Uint16Array(PX_N);
     for (let k = 0; k < PX_N; k++) { const o = world.owner[k]; if (o) index[k] = codeOf(o - 1); }
-    return { index, palette, key: `${layer}-${live.status?.year}` };
-  }, [world, layer, isLive, polById, live.status?.year]);
+    territoryVersion.current++;
+    return { index, palette, key: `${layer}-${territoryVersion.current}` };
+    // recalculé seulement quand les villages changent (tous les 500 ans simulés), pas à chaque image
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [world, layer, isLive, polById]);
   // Noms : royaumes (loin), échelon 2, puis villages en s'approchant ; les villages de cœur toujours
   const labels = useMemo(() => {
     if (!isLive) return undefined;

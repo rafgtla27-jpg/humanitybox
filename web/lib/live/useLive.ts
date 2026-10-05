@@ -43,6 +43,7 @@ function manifest(year: number, sea: number, peoples: People[], settlements: Set
 
 export function useLive(enabled: boolean, startYear = -120_000) {
   const worker = useRef<Worker | null>(null);
+  const lastSettlements = useRef<Settlement[]>([]);
   const [data, setData] = useState<RunData | null>(null);
   const [status, setStatus] = useState<LiveStatus | null>(null);
   const [events, setEvents] = useState<{ year: number; text: string; people?: number; settlement?: number }[]>([]);
@@ -56,10 +57,10 @@ export function useLive(enabled: boolean, startYear = -120_000) {
     w.onmessage = (ev) => {
       const m = ev.data;
       if (m.type !== "snapshot") return;
-      setData({ manifest: manifest(m.year, m.sea, m.peoples, m.settlements), frames: m.frames, climate: m.climate, extra: m.extra });
+      if (m.world) { lastSettlements.current = m.world.settlements; setWorld({ owner: m.world.owner, settlements: m.world.settlements, polities: m.world.polities }); }
+      setData({ manifest: manifest(m.year, m.sea, m.peoples, lastSettlements.current), frames: m.frames, climate: m.climate, extra: m.extra });
       setPeoples(m.peoples);
-      setWorld({ owner: m.owner, settlements: m.settlements, polities: m.polities });
-      setTechStatus(m.techStatus);
+      if (m.techStatus) setTechStatus(m.techStatus);
       setStatus({ year: m.year, sapiens: m.totals.sapiens, archaic: m.totals.archaic, playing: m.playing, yearsPerSecond: m.yearsPerSecond });
       if (m.events.length) setEvents((e) => [...e, ...m.events].slice(-300));
     };

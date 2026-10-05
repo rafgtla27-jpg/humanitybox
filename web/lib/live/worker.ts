@@ -12,6 +12,8 @@ let playing = true;
 let yearsPerSecond = 600;
 let lastPost = 0;
 let sentEvents = 0;
+let sentWorld = -1;
+let lastTechStatus = 0;
 
 async function gunzip(url: string): Promise<Uint8Array> {
   const res = await fetch(url);
@@ -37,9 +39,11 @@ function snapshot() {
   let s = 0;
   while (s < ys.length - 1 && e.year > (ys[s] + (ys[s + 1] ?? ys[s])) / 2) s++;
   const frames = new Uint8Array(3 * NC), climate = new Uint8Array(3 * NC), extra = new Uint8Array(8 * NC);
-  // Savoirs : niveau par cellule, part de l'humanité qui maîtrise chacun, savoirs de chaque village
+  // Savoirs : niveau par cellule (à chaque image) ; parts de l'humanité (toutes les secondes)
   const share = new Float64Array(NT);
   let total = 0;
+  const withStatus = performance.now() - lastTechStatus > 1000;
+  if (withStatus) lastTechStatus = performance.now();
   const agriT = TECHS.findIndex((t) => t.id === "agri");
   for (let k = 0; k < NC; k++) {
     if (e.N[k] < 1) continue;
@@ -51,7 +55,10 @@ function snapshot() {
     }
     extra[7 * NC + k] = 1 + Math.round((254 * n) / NT);
   }
-  const techStatus = TECHS.map((t, i) => ({ id: t.id, first: e.techFirst[i], share: total ? share[i] / total : 0 }));
+  const techStatus = withStatus ? TECHS.map((t, i) => ({ id: t.id, first: e.techFirst[i], share: total ? share[i] / total : 0 })) : null;
+  // Villages, territoires et échelons : envoyés seulement quand ils ont changé (tous les 500 ans simulés)
+  const worldChanged = e.worldVersion !== sentWorld;
+  sentWorld = e.worldVersion;
   // âge de chaque cellule = âge du village qui la possède (pour l'architecture)
   const st = e.settlements;
   for (let y = 0; y < 360; y++) for (let x = 0; x < 720; x++) {
@@ -83,21 +90,29 @@ function snapshot() {
   const t = e.totals();
   (self as unknown as Worker).postMessage(
     { type: "snapshot", year: e.year, sea: e.seaLevel(), frames, climate, extra, totals: t, events, playing, yearsPerSecond, peoples: e.peoples,
-      owner: st.owner.slice(), polities: st.polities, techStatus,
-      settlements: st.list.map((x) => ({ ...x, techs: x.alive ? TECHS.filter((t, i) => (t.id === "agri" ? Math.min(1, e.Ag[x.k] / 0.35) : e.tech[i * NC + x.k]) >= 0.5).map((t) => t.id) : [] })) },
+      techStatus,
+      world: worldChanged ? {
+        owner: st.owner.slice(), polities: st.polities,
+        settlements: st.list.filter((x) => x.alive).map((x) => ({ ...x, techs: TECHS.filter((t, i) => (t.id === "agri" ? Math.min(1, e.Ag[x.k] / 0.35) : e.tech[i * NC + x.k]) >= 0.5).map((t) => t.id) })),
+      } : null },
     [frames.buffer, climate.buffer, extra.buffer],
   );
 }
 
+// Boucle cadencée par une « dette » d'années : on simule autant que la vitesse demandée l'exige,
+// par tranches de ≤ 40 ms, en rendant la main 4 ms entre deux tranches (messages, instantanés).
+let debt = 0;
+let lastLoop = performance.now();
 function loop() {
+  const now = performance.now();
   if (engine && playing && engine.year < 0) {
+    debt = Math.min(debt + ((now - lastLoop) / 1000) * yearsPerSecond, yearsPerSecond * 0.5);
     const t0 = performance.now();
-    const target = (yearsPerSecond * 50) / 1000; // années à simuler pendant ce tic de 50 ms
-    let done = 0;
-    while (done < target && performance.now() - t0 < 40 && engine.year < 0) { engine.step(20); done += 20; }
-  }
-  if (performance.now() - lastPost > 160) { lastPost = performance.now(); snapshot(); }
-  setTimeout(loop, 50);
+    while (debt >= 20 && performance.now() - t0 < 40 && engine.year < 0) { engine.step(20); debt -= 20; }
+  } else debt = 0;
+  lastLoop = now;
+  if (performance.now() - lastPost > 220) { lastPost = performance.now(); snapshot(); }
+  setTimeout(loop, 4);
 }
 
 self.onmessage = async (ev: MessageEvent) => {

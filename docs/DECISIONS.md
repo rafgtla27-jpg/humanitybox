@@ -650,3 +650,27 @@ l'humanité qui maîtrise chaque savoir, « puis oublié ») ; savoirs du villag
 « Niveau technique ».
 Coût : ≈ 80 ms par pas de 20 ans dans Node (contre ≈ 45 ms avant) : le moteur ralentit ; optimisation
 à prévoir.
+
+**0.10.1 — optimisation du moteur en direct (priorité de l'utilisateur)**
+Mesure avant : 128 ms par pas de 20 ans (Node), soit ≈ 160 ans simulés par seconde. Profil :
+capacité d'accueil 49 %, migration 19 %, savoirs 12 %, réseaux 10 %.
+Corrections, sans changer la logique du modèle :
+- capacité : plus de fonctions créées à chaque cellule, accès directs aux savoirs, cellules vides
+  sautées, tableaux de travail alloués une fois ;
+- migration : boucles simples au lieu de `forEach`, pas de modulo, tampons réutilisés ;
+- environnement : chaque tranche climatique décodée une seule fois (au lieu de 2 × 64 800
+  exponentiations à chaque pas) ;
+- réseaux sociaux : flou gaussien sans modulo (lignes recopiées avec leurs bords) ;
+- savoirs : contexte réutilisé, préalables et voisins précalculés, double tampon, savoirs hors de
+  portée sautés ;
+- échanges avec la page : villages et territoires envoyés seulement quand ils changent (tous les
+  500 ans simulés), parts de l'humanité par savoir une fois par seconde, territoires recalculés
+  seulement à ce moment-là ;
+- boucle du Web Worker cadencée par une dette d'années (elle rattrape la vitesse demandée au lieu
+  d'attendre 50 ms entre deux pas).
+Mesure après : 28,7 ms par pas (Node) → ≈ 700 ans/s, ×4,5 ; une partie complète de −12 000 à
+aujourd'hui en 20 s au lieu de 86 s. Comportement inchangé (mêmes ordres de grandeur, aléa près).
+Dans le navigateur de test (un seul cœur partagé avec un rendu 3D logiciel), le gain est limité ;
+sur un ordinateur avec carte graphique, le Worker dispose d'un cœur entier.
+Reste le plus coûteux : migration (32 %), réseaux sociaux (26 %).
+Prochaine étape demandée : plus de savoirs, plus de causalité, ressources et inventaires des villes.

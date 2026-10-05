@@ -11,6 +11,8 @@ import { Settlements } from "./settlements";
 import { NT, TECHS, TECH_INDEX, type Ctx } from "./techs";
 export const NY = 180, NX = 360, NC = NY * NX;
 /** Décalage de chaque savoir dans le tableau `tech` (évite des recherches dans la boucle chaude). */
+const PRE = TECHS.map((t) => Int32Array.from(t.pre.map((id) => TECHS.findIndex((x) => x.id === id))));
+const ERA_RATE = [1, 6, 3, 2.5, 3];
 const TO = Object.fromEntries(TECHS.map((t, i) => [t.id, i * 180 * 360])) as Record<string, number>;
 const DIRS: [number, number][] = [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1]];
 const DIAG = [0.7, 1, 0.7, 1, 1, 0.7, 1, 0.7];
@@ -39,22 +41,33 @@ function makeBlur(sigma: number) {
   const R = Math.ceil(3 * sigma);
   const w = Array.from({ length: 2 * R + 1 }, (_, i) => Math.exp(-((i - R) ** 2) / (2 * sigma * sigma)));
   const norm = w.reduce((a, b) => a + b, 0);
-  const kern = w.map((x) => x / norm);
+  const kern = Float32Array.from(w.map((x) => x / norm));
   const tmp = new Float32Array(NC);
+  const row = new Float32Array(NX + 2 * R);
+  const col = new Float32Array(NY);
   const gain = 2 * Math.PI * sigma * sigma;
+  const L = 2 * R + 1;
   return (src: Float32Array, out: Float32Array) => {
+    // passe horizontale : ligne recopiée avec ses bords (longitude périodique), sans modulo
     for (let i = 0; i < NY; i++) {
-      const row = i * NX;
+      const o = i * NX;
+      for (let j = 0; j < NX; j++) row[j + R] = src[o + j];
+      for (let t = 0; t < R; t++) { row[t] = src[o + NX - R + t]; row[NX + R + t] = src[o + t]; }
       for (let j = 0; j < NX; j++) {
         let s = 0;
-        for (let t = -R; t <= R; t++) s += src[row + ((j + t + NX) % NX)] * kern[t + R];
-        tmp[row + j] = s;
+        for (let t = 0; t < L; t++) s += row[j + t] * kern[t];
+        tmp[o + j] = s;
       }
     }
-    for (let i = 0; i < NY; i++) for (let j = 0; j < NX; j++) {
-      let s = 0;
-      for (let t = -R; t <= R; t++) { const ii = i + t; if (ii >= 0 && ii < NY) s += tmp[ii * NX + j] * kern[t + R]; }
-      out[i * NX + j] = s * gain;
+    // passe verticale : latitude bornée
+    for (let j = 0; j < NX; j++) {
+      for (let i = 0; i < NY; i++) col[i] = tmp[i * NX + j];
+      for (let i = 0; i < NY; i++) {
+        let s = 0;
+        const t0 = Math.max(0, R - i), t1 = Math.min(L, NY - i + R);
+        for (let t = t0; t < t1; t++) s += col[i + t - R] * kern[t];
+        out[i * NX + j] = s * gain;
+      }
     }
   };
 }
@@ -100,8 +113,15 @@ export class LiveEngine {
   peopleIdx = new Uint8Array(NC);
   peoples: People[] = [];
   settlements = new Settlements();
+  // Tableaux de travail alloués une seule fois (évite de remplir le ramasse-miettes à chaque pas)
+  private buf = {
+    Ks: new Float32Array(NC), Ka: new Float32Array(NC), loadS: new Float32Array(NC), loadA: new Float32Array(NC),
+    cE: new Float32Array(NC), CE: new Float32Array(NC), SE: new Float32Array(NC), AgE: new Float32Array(NC),
+    room: new Float32Array(NC), dX: new Float32Array(NC), dT: Array.from({ length: 7 }, () => new Float32Array(NC)),
+  };
   // Graphe des savoirs : maîtrise de chaque savoir, par cellule (TECHS[t] → tech[t * NC + k])
   tech = new Float32Array(NT * NC);
+  private techNext = new Float32Array(NT * NC);
   techFirst: ({ year: number; where: string } | null)[] = TECHS.map(() => null);
   ore = new Float32Array(NC);
   Pr = new Float32Array(NC);
@@ -170,22 +190,40 @@ export class LiveEngine {
     return ceil * Math.min(1, Math.max(0, Math.log(Math.max(n, 1) / P.n0) / Math.log(P.span)));
   }
 
-  /** Environnement interpolé entre deux tranches cuites. */
+  /** Environnement interpolé entre deux tranches cuites (tranches décodées une seule fois). */
+  private sliceCache = new Map<number, { K: Float32Array; T: Float32Array; pot: Float32Array; lf: Float32Array }>();
+  private decoded(slice: number) {
+    let c = this.sliceCache.get(slice);
+    if (c) return c;
+    const F = 9, d = this.env.data, [kLo, kSpan] = this.env.kLog;
+    c = { K: new Float32Array(NC), T: new Float32Array(NC), pot: new Float32Array(NC), lf: new Float32Array(NC) };
+    for (let k = 0; k < NC; k++) {
+      const qk = d[(slice * F) * NC + k];
+      c.K[k] = qk ? 10 ** (kLo + ((qk - 1) / 254) * kSpan) : 0;
+      const qt = d[(slice * F + 1) * NC + k];
+      c.T[k] = qt ? -40 + (75 * (qt - 1)) / 254 : NaN;
+      c.pot[k] = d[(slice * F + 4) * NC + k] / 255;
+      c.lf[k] = d[(slice * F + 5) * NC + k] / 255;
+    }
+    if (this.sliceCache.size > 3) this.sliceCache.delete(this.sliceCache.keys().next().value!);
+    this.sliceCache.set(slice, c);
+    return c;
+  }
+
   private loadEnv() {
     const ys = this.env.years;
     let s = 0;
     while (s < ys.length - 2 && this.year > ys[s + 1]) s++;
     const w = Math.min(1, Math.max(0, (this.year - ys[s]) / (ys[s + 1] - ys[s])));
-    const F = 9, d = this.env.data, [kLo, kSpan] = this.env.kLog;
-    const at = (slice: number, f: number, k: number) => d[(slice * F + f) * NC + k];
-    const deK = (q: number) => (q ? 10 ** (kLo + ((q - 1) / 254) * kSpan) : 0);
+    const a = this.decoded(s), b = this.decoded(s + 1), w0 = 1 - w;
     for (let k = 0; k < NC; k++) {
-      this.K[k] = deK(at(s, 0, k)) * (1 - w) + deK(at(s + 1, 0, k)) * w;
-      const t0 = at(s, 1, k), t1 = at(s + 1, 1, k);
-      this.T[k] = t0 && t1 ? -40 + (75 * ((t0 * (1 - w) + t1 * w) - 1)) / 254 : -30;
-      this.pot[k] = (at(s, 4, k) * (1 - w) + at(s + 1, 4, k) * w) / 255;
-      this.lf[k] = (at(s, 5, k) * (1 - w) + at(s + 1, 5, k) * w) / 255;
+      this.K[k] = a.K[k] * w0 + b.K[k] * w;
+      const ta = a.T[k], tb = b.T[k];
+      this.T[k] = ta === ta && tb === tb ? ta * w0 + tb * w : -30;
+      this.pot[k] = a.pot[k] * w0 + b.pot[k] * w;
+      this.lf[k] = a.lf[k] * w0 + b.lf[k] * w;
     }
+    const F = 9, d = this.env.data;
     const near = w < 0.5 ? s : s + 1;
     if (near !== this.envSlice) {
       this.envSlice = near;
@@ -288,33 +326,46 @@ export class LiveEngine {
     }
   }
 
+  /** Temps passé par section (ms cumulées) — diagnostic de performance */
+  prof: Record<string, number> = {};
+  private tick(name: string, t0: number) { this.prof[name] = (this.prof[name] ?? 0) + performance.now() - t0; return performance.now(); }
+
   step(dt = 20) {
+    let t = performance.now();
     this.loadEnv();
     this.applyEffects();
+    t = this.tick("env", t);
     if (this.steps % 5 === 0) this.networks();
+    t = this.tick("networks", t);
     this.steps++;
     const { N, A } = this;
-    const Ks = new Float32Array(NC), Ka = new Float32Array(NC), loadS = new Float32Array(NC), loadA = new Float32Array(NC);
-    const cE = new Float32Array(NC), CE = new Float32Array(NC), SE = new Float32Array(NC), AgE = new Float32Array(NC);
+    const { Ks, Ka, loadS, loadA, cE, CE, SE, AgE } = this.buf;
+    const tech = this.tech, T = this.T, river = this.river, arch = this.arch, Pr = this.Pr, kmul = this.kmul;
+    const net = this.net, oBow = TO.bow, oFish = TO.fishing, oHerd = TO.herding, oIrr = TO.irrigation, oPlough = TO.plough,
+      oIron = TO.iron, oMill = TO.mill, oSteam = TO.steam, oElec = TO.electricity;
     for (let k = 0; k < NC; k++) {
-      cE[k] = this.carried(this.c, this.net.Nc, k);
-      CE[k] = this.carried(this.C, this.net.NC, k);
-      SE[k] = this.carried(this.S, this.net.NS, k);
-      AgE[k] = this.carried(this.Ag, this.net.NAg, k);
-      const nA = this.net.A[k], CAe = Math.max(this.CA[k], nA > 1e-6 ? this.net.ACA[k] / nA : 0);
-      const base = this.K[k] * this.kmul[k];
-      const cold = (c: number) => { const tmin = P.tMin - P.coldDelta * c; return Math.min(1, Math.max(0, (this.T[k] - tmin) / (P.tOk - tmin))); };
-      const tg = (id: string) => this.tech[TO[id] + k];
-      const wild = 1 + 0.15 * tg("bow") + 0.3 * tg("fishing") * Math.max(this.river[k], this.arch[k] > 0 ? 1 : 0)
-        + 0.5 * tg("herding") * this.steppe(k);
-      const farmBoost = 1 + 0.6 * tg("irrigation") * this.river[k] * Math.min(1, Math.max(0, (700 - this.Pr[k]) / 500))
-        + 0.4 * tg("plough") + 0.2 * tg("iron") + 0.3 * tg("mill") + 0.5 * tg("steam") + 0.5 * tg("electricity");
-      Ks[k] = base * wild * cold(cE[k]) + P.farmDensity * AREA[k] * this.lf[k] * this.pot[k] * AgE[k] * this.kmul[k] * farmBoost;
-      Ka[k] = base * cold(0.4);
-      const adv = Math.max(-0.5, Math.min(0.5, P.adv * (CE[k] - CAe)));
+      const base = this.K[k] * kmul[k];
+      if (base <= 0 && this.pot[k] <= 0) { Ks[k] = Ka[k] = 0; loadS[k] = N[k] + A[k]; loadA[k] = A[k] + N[k]; cE[k] = CE[k] = SE[k] = AgE[k] = 0; continue; }
+      const nN = net.N[k], inv = nN > 1e-6 ? 1 / nN : 0;
+      // trait des arrivants : max(valeur locale, moyenne du réseau voisin)
+      const ce = Math.max(this.c[k], net.Nc[k] * inv), Ce = Math.max(this.C[k], net.NC[k] * inv);
+      cE[k] = ce; CE[k] = Ce; SE[k] = Math.max(this.S[k], net.NS[k] * inv); const age = Math.max(this.Ag[k], net.NAg[k] * inv); AgE[k] = age;
+      const nA = net.A[k], CAe = Math.max(this.CA[k], nA > 1e-6 ? net.ACA[k] / nA : 0);
+      const tminS = P.tMin - P.coldDelta * ce, tminA = P.tMin - P.coldDelta * 0.4;
+      const coldS = Math.min(1, Math.max(0, (T[k] - tminS) / (P.tOk - tminS)));
+      const coldA2 = Math.min(1, Math.max(0, (T[k] - tminA) / (P.tOk - tminA)));
+      const p = Pr[k];
+      const steppe = T[k] > -2 && p > 200 && p < 750 ? Math.min(1, (p - 200) / 150, (750 - p) / 150) : 0;
+      const wild = 1 + 0.15 * tech[oBow + k] + 0.3 * tech[oFish + k] * Math.max(river[k], arch[k] > 0 ? 1 : 0) + 0.5 * tech[oHerd + k] * steppe;
+      const farmBoost = 1 + 0.6 * tech[oIrr + k] * river[k] * Math.min(1, Math.max(0, (700 - p) / 500))
+        + 0.4 * tech[oPlough + k] + 0.2 * tech[oIron + k] + 0.3 * tech[oMill + k] + 0.5 * tech[oSteam + k] + 0.5 * tech[oElec + k];
+      Ks[k] = base * wild * coldS + P.farmDensity * AREA[k] * this.lf[k] * this.pot[k] * age * kmul[k] * farmBoost;
+      Ka[k] = base * coldA2;
+      const adv = Math.max(-0.5, Math.min(0.5, P.adv * (Ce - CAe)));
       loadS[k] = N[k] + (1 - adv) * A[k];
       loadA[k] = A[k] + (1 + adv) * N[k];
     }
+    t = this.tick("capacité", t);
     // 1. croissance
     for (let k = 0; k < NC; k++) {
       const storage = this.tech[TO.storage + k], med = this.tech[TO.medicine + k];
@@ -335,6 +386,7 @@ export class LiveEngine {
       this.M2[k] = Math.min(1, Math.max(0, this.M2[k] + amp * (this.rand() * 2 - 1)));
     }
     this.migrate(A, Ka, loadA, false, [this.CA], null, dt);
+    t = this.tick("migration", t);
     // 3. hasard démographique et extinction des réseaux trop petits
     const pDie = 1 - (1 - P.pExt) ** dt;
     for (let k = 0; k < NC; k++) {
@@ -376,9 +428,12 @@ export class LiveEngine {
         this.CA[k] += (tCA - this.CA[k]) * (tCA > this.CA[k] ? kg : kl);
       }
     }
+    t = this.tick("cultures", t);
     this.year += dt;
     if (this.steps % 5 === 0) this.updateTechs(100);
+    t = this.tick("savoirs", t);
     if (this.steps % 25 === 1) { this.identifyPeoples(); this.updateSettlements(); }
+    this.tick("peuples+villages", t);
   }
 
   steppe(k: number) {
@@ -390,58 +445,72 @@ export class LiveEngine {
   updateTechs(dt: number) {
     const agriIdx = TECH_INDEX.get("agri")!;
     const sci = TECH_INDEX.get("science")!, print = TECH_INDEX.get("printing")!;
-    // maîtrise de l'agriculture : rapportée à ce que permet le milieu (0,35 ≈ pleinement agricole)
-    const m = (t: number, k: number) => (t === agriIdx ? Math.min(1, this.Ag[k] / 0.35) : this.tech[t * NC + k]);
-    const pre = TECHS.map((t) => t.pre.map((id) => TECH_INDEX.get(id)!));
-    const next = this.tech.slice();
+    const tech = this.tech, next = this.techNext;
+    next.set(tech);
+    const ctx: Ctx = { T: 0, P: 0, river: 0, arch: 0, coast: false, ore: 0, steppe: 0, density: 0, net: 0, C: 0, agri: 0, pop: 0 };
+    const nb = new Int32Array(4);
+    const grow = Math.min(1, (0.3 * dt) / 100), learnBase = dt / 300;
     for (let k = 0; k < NC; k++) {
       const N = this.N[k];
-      if (N < 30) { for (let t = 0; t < NT; t++) next[t * NC + k] = 0; continue; }
-      const i = Math.floor(k / NX), j = k % NX;
-      const area = AREA[k] * Math.max(this.lf[k], 1e-3);
-      const ctx: Ctx = {
-        T: this.T[k], P: this.Pr[k], river: this.river[k], arch: this.arch[k], coast: this.lf[k] < 0.98 && this.lf[k] > 0.02,
-        ore: this.ore[k], steppe: this.steppe(k), density: N / area, net: this.net.N[k], C: this.C[k], agri: this.Ag[k], pop: N,
-      };
-      const speed = (1 + m(sci, k)) * (1 + m(print, k));
+      if (N < 30) {
+        for (let t = 0; t < NT; t++) next[t * NC + k] = 0;
+        continue;
+      }
+      const i = (k / NX) | 0, j = k - i * NX;
+      // voisins reliés à pied et habités (calculés une fois pour tous les savoirs)
+      let nn = 0;
+      const ck = this.conn[k];
+      if (i > 0 && (ck >> 1) & 1 && this.N[k - NX] >= 30) nb[nn++] = k - NX;
+      if (i < NY - 1 && (ck >> 6) & 1 && this.N[k + NX] >= 30) nb[nn++] = k + NX;
+      const kw = j === 0 ? k + NX - 1 : k - 1, ke = j === NX - 1 ? k - NX + 1 : k + 1;
+      if ((ck >> 3) & 1 && this.N[kw] >= 30) nb[nn++] = kw;
+      if ((ck >> 4) & 1 && this.N[ke] >= 30) nb[nn++] = ke;
+      const net = this.net.N[k];
+      const agriM = Math.min(1, this.Ag[k] / 0.35);
+      const speed = (1 + tech[sci * NC + k]) * (1 + tech[print * NC + k]);
+      let ctxReady = false;
       for (let t = 0; t < NT; t++) {
-        const tech = TECHS[t];
-        if (t === agriIdx || tech.rate === 0) continue;
-        const cur = this.tech[t * NC + k];
+        if (t === agriIdx) continue;
+        const def = TECHS[t];
+        if (def.rate === 0) continue;
+        const off = t * NC;
+        const cur = tech[off + k];
+        const preq = PRE[t];
         let ok = 1;
-        for (const q of pre[t]) ok = Math.min(ok, m(q, k));
+        for (let q = 0; q < preq.length; q++) { const pq = preq[q]; const v = pq === agriIdx ? agriM : tech[pq * NC + k]; if (v < ok) ok = v; }
+        if (cur === 0 && ok < 0.3) continue; // rien à faire : ni maîtrisé, ni accessible
         let v = cur;
-        // 1. invention : préalables maîtrisés × opportunité × savoir-faire × taille du réseau
         if (cur < 0.05 && ok >= 0.4) {
-          const pr = tech.rate * [1, 6, 3, 2.5, 3][tech.era] * dt * speed * tech.cond(ctx) * this.C[k] * Math.min(1, ctx.net / Math.max(1, tech.minNet));
-          if (this.rand() < pr) {
+          if (!ctxReady) {
+            const area = AREA[k] * Math.max(this.lf[k], 1e-3);
+            ctx.T = this.T[k]; ctx.P = this.Pr[k]; ctx.river = this.river[k]; ctx.arch = this.arch[k];
+            ctx.coast = this.lf[k] < 0.98 && this.lf[k] > 0.02; ctx.ore = this.ore[k]; ctx.steppe = this.steppe(k);
+            ctx.density = N / area; ctx.net = net; ctx.C = this.C[k]; ctx.agri = this.Ag[k]; ctx.pop = N;
+            ctxReady = true;
+          }
+          const pr = def.rate * ERA_RATE[def.era] * dt * speed * this.C[k] * Math.min(1, net / Math.max(1, def.minNet));
+          if (pr > 0 && this.rand() < pr * def.cond(ctx)) {
             v = 0.2;
             if (!this.techFirst[t]) {
               const ppl = this.peoples[this.peopleIdx[k] - 1];
               this.techFirst[t] = { year: this.year, where: ppl ? `les ${ppl.name}` : `${(90 - i - 0.5).toFixed(0)}°, ${(-180 + j + 0.5).toFixed(0)}°` };
-              this.events.push({ year: this.year, text: `Invention : ${tech.name.toLowerCase()} (${this.techFirst[t]!.where})` });
+              this.events.push({ year: this.year, text: `Invention : ${def.name.toLowerCase()} (${this.techFirst[t]!.where})` });
             }
           }
         }
-        // 2. diffusion : on apprend d'un voisin qui maîtrise mieux, si on en a les préalables
-        if (ok >= 0.3) {
+        if (ok >= 0.3 && nn > 0) {
           let best = 0;
-          for (const [di, dj, b] of [[-1, 0, 1], [1, 0, 6], [0, -1, 3], [0, 1, 4]] as const) {
-            const ii = i + di; if (ii < 0 || ii >= NY || !((this.conn[k] >> b) & 1)) continue;
-            const kk = ii * NX + ((j + dj + NX) % NX);
-            if (this.N[kk] >= 30) best = Math.max(best, this.tech[t * NC + kk]);
-          }
-          if (best > v) v += (best - v) * Math.min(1, (dt / 300) * speed);
+          for (let q = 0; q < nn; q++) { const b = tech[off + nb[q]]; if (b > best) best = b; }
+          if (best > v) v += (best - v) * Math.min(1, learnBase * speed);
         }
-        // 3. développement local, ou oubli si le réseau est trop petit pour entretenir le savoir
         if (v > 0) {
-          const need = tech.minNet;
-          if (ctx.net >= need) v += (1 - v) * Math.min(1, (0.3 * dt) / 100);
-          else v -= v * Math.min(1, ((0.25 * dt) / 100) * (1 - ctx.net / Math.max(1, need)));
+          if (net >= def.minNet) v += (1 - v) * grow;
+          else v -= v * Math.min(1, ((0.25 * dt) / 100) * (1 - net / Math.max(1, def.minNet)));
         }
-        next[t * NC + k] = Math.max(0, Math.min(1, v));
+        next[off + k] = v < 0 ? 0 : v > 1 ? 1 : v;
       }
     }
+    this.techNext = tech;
     this.tech = next;
   }
 
@@ -455,7 +524,9 @@ export class LiveEngine {
   }
 
   /** G4 : villages, territoires et échelons politiques, à partir des agriculteurs simulés. */
+  worldVersion = 0;
   updateSettlements() {
+    this.worldVersion++;
     const farmers = new Float32Array(NC);
     for (let k = 0; k < NC; k++) farmers[k] = this.Ag[k] > 0.3 ? this.N[k] * this.Ag[k] : 0;
     this.settlements.update(this.year, farmers, this.peopleIdx,
@@ -545,51 +616,69 @@ export class LiveEngine {
   }
 
   private migrate(X: Float32Array, K: Float32Array, load: Float32Array, sapiens: boolean, traits: Float32Array[], sea: Float32Array | null, dt: number) {
-    const room = new Float32Array(NC);
+    const { room, dX } = this.buf;
+    const dT = this.buf.dT.slice(0, traits.length);
+    const nT = traits.length;
+    room.fill(0); dX.fill(0);
+    for (let t = 0; t < nT; t++) dT[t].fill(0);
+    const rough = this.env.rough, flags = this.flags, conn = this.conn, tech = this.tech;
     for (let k = 0; k < NC; k++) {
-      if (K[k] <= 0 || !(this.flags[k] & 1) || (!sapiens && !this.rangeA[k])) continue;
-      room[k] = Math.max(0, Math.min(1, 1 - load[k] / K[k])) * (this.env.rough[k] / 255);
+      if (K[k] <= 0 || !(flags[k] & 1) || (!sapiens && !this.rangeA[k])) continue;
+      const r = 1 - load[k] / K[k];
+      room[k] = (r < 0 ? 0 : r > 1 ? 1 : r) * (rough[k] / 255);
     }
-    const dX = new Float32Array(NC);
-    const dT = traits.map(() => new Float32Array(NC));
     const wts = new Float32Array(24), dest = new Int32Array(24);
+    const oCanoe = TO.canoe, oSail = TO.sail, oComp = TO.compass, oWheel = TO.wheel, oRoads = TO.roads;
     for (let i = 0; i < NY; i++) for (let j = 0; j < NX; j++) {
       const k = i * NX + j;
-      if (X[k] <= 0) continue;
-      const tb = (id: string) => this.tech[TO[id] + k];
-      const boats = sea ? Math.max(Math.min(1, Math.max(0, (sea[k] - P.boatS) / (1 - P.boatS))), 0.6 * tb("canoe"), 0.85 * tb("sail"), tb("compass")) : 0;
+      const x = X[k];
+      if (x <= 0) continue;
+      let boats = 0;
+      if (sea) {
+        const sb = (sea[k] - P.boatS) / (1 - P.boatS);
+        boats = Math.max(sb < 0 ? 0 : sb > 1 ? 1 : sb, 0.6 * tech[oCanoe + k], 0.85 * tech[oSail + k], tech[oComp + k]);
+      }
       let W = 0, n = 0;
+      const ck = conn[k];
       for (let b = 0; b < 8; b++) {
-        const [di, dj] = DIRS[b];
+        const di = DIRS[b][0], dj = DIRS[b][1];
         const ii = i + di; if (ii < 0 || ii >= NY) continue;
-        const kk = ii * NX + ((j + dj + NX) % NX);
-        const linked = (this.conn[k] >> b) & 1;
+        let jj = j + dj; if (jj < 0) jj += NX; else if (jj >= NX) jj -= NX;
+        const kk = ii * NX + jj;
+        const linked = (ck >> b) & 1;
         let w = room[kk] * DIAG[b] * (linked ? 1 : sapiens ? P.pSea * boats : 0);
         if (w > 0) { wts[n] = w; dest[n] = kk; n++; W += w; }
-        if (sapiens && boats > 0 && !(this.flags[kk] & 1)) {
+        if (sapiens && boats > 0 && !(flags[kk] & 1)) {
           const i2 = i + 2 * di; if (i2 < 0 || i2 >= NY) continue;
-          const k2 = i2 * NX + ((j + 2 * dj + NX) % NX);
+          let j2 = j + 2 * dj; if (j2 < 0) j2 += NX; else if (j2 >= NX) j2 -= NX;
+          const k2 = i2 * NX + j2;
           w = room[k2] * DIAG[b] * P.pSea * boats;
           if (w > 0) { wts[n] = w; dest[n] = k2; n++; W += w; }
         }
       }
       if (W <= 0) continue;
       const pressure = K[k] > 0 ? Math.min(3, load[k] / K[k]) : 3;
-      const move = sea ? 1 + 0.3 * this.tech[TO.wheel + k] + 0.3 * this.tech[TO.roads + k] : 1;
-      const out = X[k] * Math.min(0.5, (P.mBase + P.mPress * pressure) * dt * move);
+      const move = sea ? 1 + 0.3 * tech[oWheel + k] + 0.3 * tech[oRoads + k] : 1;
+      const out = x * Math.min(0.5, (P.mBase + P.mPress * pressure) * dt * move);
       dX[k] -= out;
-      traits.forEach((Tr, t) => { dT[t][k] -= out * Tr[k]; });
+      for (let t = 0; t < nT; t++) dT[t][k] -= out * traits[t][k];
+      const inv = out / W;
       for (let q = 0; q < n; q++) {
-        const f = (out * wts[q]) / W;
-        dX[dest[q]] += f;
-        traits.forEach((Tr, t) => { dT[t][dest[q]] += f * Tr[k]; });
+        const f = wts[q] * inv, d = dest[q];
+        dX[d] += f;
+        for (let t = 0; t < nT; t++) dT[t][d] += f * traits[t][k];
       }
     }
     for (let k = 0; k < NC; k++) {
-      if (dX[k] === 0) continue;
+      const dx = dX[k];
+      if (dx === 0) continue;
       const before = X[k];
-      const after = Math.max(0, before + dX[k]);
-      traits.forEach((Tr, t) => { Tr[k] = after > 1e-9 ? Math.min(1, Math.max(0, (Tr[k] * before + dT[t][k]) / after)) : 0; });
+      let after = before + dx; if (after < 0) after = 0;
+      for (let t = 0; t < nT; t++) {
+        const Tr = traits[t];
+        const v = after > 1e-9 ? (Tr[k] * before + dT[t][k]) / after : 0;
+        Tr[k] = v < 0 ? 0 : v > 1 ? 1 : v;
+      }
       X[k] = after;
     }
   }
