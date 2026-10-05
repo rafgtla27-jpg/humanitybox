@@ -70,6 +70,28 @@ du projet.
   des couches (sécheresse qui craquelle le sol, feu qui carbonise les arbres). Exige des données
   locales (végétation, sols, structures) qui n'existent qu'à partir de V0.6.
 
+### Piste jeu (décision : god game à la WorldBox, avec un peuple de cœur)
+
+Référence : WorldBox — le joueur est un dieu sans ressources ni missions, avec une boîte à
+pouvoirs (création, catastrophes, bénédictions, déplacer des unités) ; le monde vit seul
+(royaumes, guerres, colonisation) ; on peut suivre ses créatures favorites.
+Ce qu'on garde de WORLD_SIM : un monde réel et des causes logiques ; le joueur agit sur les causes
+(climat, fertilité, catastrophes), pas sur des barres de vie.
+
+- **G0 — Monde lisible** (fait, viewer 0.6.0) : relief 15′, côtes dynamiques, biomes, champs,
+  personnages procéduraux à l'échelle, niveau de détail en vue rapprochée.
+- **G1 — Moteur en direct** (prochain gros chantier) : aujourd'hui le site REJOUE des simulations
+  calculées à l'avance ; un dieu doit pouvoir agir pendant que le monde tourne. Portage du moteur
+  (grille 1°, cohortes) en TypeScript dans un Web Worker, ou Rust → WebAssembly, à quelques
+  centaines d'années par seconde. Le moteur Python reste la référence pour les expériences.
+- **G2 — Pouvoirs divins** branchés sur les causes du modèle : sécheresse / pluie, coup de froid,
+  volcan, épidémie, bénédiction de fertilité, aimant divin (déplacer un groupe), faire naître un
+  groupe, offrir une technique (feu, bateau, semence).
+- **G3 — Peuples émergents et peuple de cœur** : un trait culturel neutre qui dérive et se mélange
+  regroupe les cohortes en peuples (nom, couleur, bannière) ; le joueur s'attache à un peuple, le
+  suit, reçoit sa chronique (premier village, famine, migration, rencontre).
+- **G4 — Villages, royaumes, guerres** : V0.6–V0.8 de la roadmap, vus comme un jeu.
+
 ### Piste sprites (personnages à l'écran)
 
 Règle : une silhouette ne montre jamais plus que ce que le moteur simule. Tant qu'il n'y a pas
@@ -79,7 +101,7 @@ d'agents, une silhouette représente un effectif ; elle ne prend pas de décisio
   10 000 selon la population mondiale, au plus 30 000 silhouettes), position stable dans sa
   cellule, apparition quand on zoome, sol de végétation sous les humains. Mouvement sur place
   décoratif.
-- **S2 — Camps et villages** (commencé en 0.5.2 : huttes là où l'on cultive ; V0.6 pour le reste) : silhouettes typées (chasseurs-cueilleurs, agriculteurs),
+- **S2 — Camps et villages** (fait en 0.6.0 : silhouettes procédurales variées et animées, feux de camp, tentes en climat froid, huttes, maisons longues et greniers chez les agriculteurs, taille réelle ~15 km, niveau de détail en vue rapprochée ; V0.6 pour les structures simulées) : silhouettes typées (chasseurs-cueilleurs, agriculteurs),
   structures (campements, huttes, greniers) quand la sédentarisation existe dans le moteur.
 - **S3 — Agents réels dans la zone regardée** (V0.7–V0.8, résolution adaptative) : la cohorte se
   décompose en groupes puis en individus là où l'on zoome ; trajets réels, caravanes sur les

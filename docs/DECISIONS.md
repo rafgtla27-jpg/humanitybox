@@ -508,3 +508,18 @@ journal des décisions et les tests.
   comprise) ; Amériques peuplées trop tard (corridor glaciaire seulement, pas de route côtière).
 Viewer : calque « Agriculture » ; étape sprites S2 — là où l'on cultive, une partie des silhouettes
 devient des huttes de village ; le monde E est la simulation d'accueil.
+
+**Viewer 0.6.0 — « la carte doit ressembler à quelque chose »**
+- Relief réel à 15′ (≈ 28 km, 6× plus fin que la simulation), ombré ; côtes recalculées à chaque
+  image depuis le niveau marin ; océan teinté par la profondeur ; biomes naturels déduits du climat
+  simulé ; champs en parcelles, fleuves et présence humaine en lavis interpolés.
+- Échelle : les personnages ont une taille réelle (~15 km sur le globe) au lieu d'une taille en
+  pixels ; invisibles depuis l'espace, ils apparaissent en descendant vers le sol (zoom jusqu'à
+  ~150 km d'altitude).
+- Sprites procéduraux : 8 silhouettes générées (taille, carrure, vêtement, lance / panier / enfant /
+  bâton) × 2 pas de marche, feux animés, tentes en climat froid, huttes ailleurs, maisons longues et
+  greniers là où l'on cultive.
+- Niveau de détail : de près, seule la région regardée est garnie, avec moins de personnes par
+  figure (jusqu'à 5) — mêmes données, représentation plus fine.
+Décision jeu : god game à la WorldBox avec un peuple de cœur. Condition technique majeure : passer
+d'un site qui rejoue des simulations à un moteur qui tourne en direct (piste G1).

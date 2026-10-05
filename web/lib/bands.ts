@@ -1,27 +1,29 @@
 /**
- * Silhouettes de groupes humains sur le globe (piste sprites, étape S1).
+ * Personnages et habitations sur le globe (piste sprites S1–S2), générés procéduralement.
  *
- * Ce que c'est : une représentation fidèle des densités simulées. Une silhouette = S personnes
- * (S choisi pour ne jamais dépasser MAX_SPRITES), placée de façon stable dans sa cellule : quand
- * la population d'une cellule grandit, des silhouettes apparaissent ; quand elle décline, elles
- * disparaissent.
- * Ce que ce n'est pas (encore) : des individus simulés. Le petit mouvement sur place est
- * décoratif. Les vrais agents arrivent avec la résolution adaptative (V0.6+, étape S3).
+ * Échelle : un personnage mesure une taille fixe EN KILOMÈTRES sur le globe (≈ 15 km), pas en
+ * pixels. Vu de l'espace il est invisible (la présence humaine se lit alors comme un lavis sur la
+ * carte) ; il apparaît quand on descend vers le sol, et grandit à mesure qu'on s'approche.
+ * Chaque figure représente un nombre réel de personnes simulées ; le mouvement de marche sur place
+ * reste décoratif tant que la simulation ne suit pas d'individus (S3).
  */
 import * as THREE from "three";
 import type { RunData } from "./paint";
 
 export const MAX_SPRITES = 30000;
-const MAX_PER_CELL = 40;
-const RADIUS = 1.004;
+const MAX_PER_CELL = 120;
+const RADIUS = 1.0015;
 const NICE = [25, 50, 100, 200, 500, 1000, 2000, 5000, 10000];
 const KM_PER_DEG = 111.2;
+const WORLD_SIZE = 15 / 6371; // ≈ 15 km, en rayons terrestres
+const COLS = 8;
+const ROWS = 3;
+const CELL = 64;
 
-const SAPIENS = new THREE.Color("#ffb54a");
-const FARM = new THREE.Color("#e8d27a");
-const ARCHAIC = new THREE.Color("#c4dcae");
+const SAPIENS = new THREE.Color("#ffbf5e");
+const ARCHAIC = new THREE.Color("#c8e0b0");
+const WHITE = new THREE.Color("#ffffff");
 
-/** Hachage déterministe → [0, 1) : même cellule, même rang = même position à chaque frame. */
 function hash(a: number, b: number, c: number) {
   let h = (a * 374761393 + b * 668265263 + c * 2147483647) | 0;
   h = Math.imul(h ^ (h >>> 13), 1274126177);
@@ -29,114 +31,182 @@ function hash(a: number, b: number, c: number) {
   return (h >>> 0) / 4294967296;
 }
 
-function silhouetteTexture(): THREE.CanvasTexture {
-  const c = document.createElement("canvas");
-  c.width = c.height = 64;
-  const g = c.getContext("2d")!;
-  const figure = (grow: number) => {
-    g.beginPath();
-    g.arc(30, 13, 7.5 + grow, 0, Math.PI * 2); // tête
-    g.fill();
-    g.beginPath();
-    g.roundRect(21 - grow, 23 - grow, 18 + 2 * grow, 21 + 2 * grow, 7); // torse
-    g.fill();
-    g.fillRect(22.5 - grow, 40, 6.5 + 2 * grow, 19 + grow); // jambes
-    g.fillRect(31 - grow, 40, 6.5 + 2 * grow, 19 + grow);
-    g.save(); // bâton
-    g.translate(45, 8);
-    g.rotate(0.16);
-    g.fillRect(-grow, -grow, 3.5 + 2 * grow, 52 + 2 * grow);
-    g.restore();
-  };
-  g.fillStyle = "#1a1408"; // contour sombre : lisible sur n'importe quel sol
-  figure(2.6);
-  g.fillStyle = "#ffffff"; // partie teintée par la couleur de la population
-  figure(0);
-  const t = new THREE.CanvasTexture(c);
-  t.colorSpace = THREE.SRGBColorSpace;
-  return t;
+function rng(seed: number) {
+  let s = seed * 9301 + 49297;
+  return () => ((s = (s * 9301 + 49297) % 233280) / 233280);
 }
 
-function hutTexture(): THREE.CanvasTexture {
+/** Atlas procédural : lignes 0–1 = 8 silhouettes × 2 pas de marche ; ligne 2 = habitations et feux. */
+function makeAtlas(): THREE.CanvasTexture {
   const c = document.createElement("canvas");
-  c.width = c.height = 64;
+  c.width = COLS * CELL;
+  c.height = ROWS * CELL;
   const g = c.getContext("2d")!;
-  const hut = (grow: number) => {
-    g.beginPath(); // toit de chaume
-    g.moveTo(32, 8 - grow);
-    g.lineTo(58 + grow, 34 + grow * 0.5);
-    g.lineTo(6 - grow, 34 + grow * 0.5);
-    g.closePath();
-    g.fill();
-    g.fillRect(14 - grow, 32, 36 + 2 * grow, 24 + grow); // murs
-  };
-  g.fillStyle = "#1a1408";
-  hut(2.6);
-  g.fillStyle = "#ffffff";
-  hut(0);
-  g.fillStyle = "#1a1408"; // porte
-  g.fillRect(28, 42, 9, 14);
+  const OUT = "#1b140a";
+
+  // --- Personnages (niveaux de gris, teintés ensuite par la couleur du peuple)
+  for (let v = 0; v < 8; v++) {
+    const r = rng(v + 11);
+    const h = 40 + r() * 12;
+    const head = 5 + r() * 2;
+    const body = 9 + r() * 6;
+    const skirt = v % 2 === 1;
+    const item = v % 4; // 0 lance, 1 panier sur la tête, 2 enfant, 3 bâton
+    for (let f = 0; f < 2; f++) {
+      const idx = v * 2 + f;
+      const ox = (idx % COLS) * CELL, oy = Math.floor(idx / COLS) * CELL;
+      const cx = ox + 30, top = oy + CELL - 4 - h;
+      const step = f === 0 ? 4 : -4;
+      const draw = (grow: number, skin: string, cloth: string, wood: string) => {
+        g.fillStyle = skin;
+        g.save(); g.translate(cx - 3, top + h * 0.62); g.rotate((step * Math.PI) / 90);
+        g.fillRect(-2.2 - grow, 0, 4.4 + 2 * grow, h * 0.38 + grow); g.restore();
+        g.save(); g.translate(cx + 3, top + h * 0.62); g.rotate((-step * Math.PI) / 90);
+        g.fillRect(-2.2 - grow, 0, 4.4 + 2 * grow, h * 0.38 + grow); g.restore();
+        g.fillStyle = cloth;
+        g.beginPath();
+        if (skirt) {
+          g.moveTo(cx - body / 2 - grow, top + head * 2 + 2 - grow);
+          g.lineTo(cx + body / 2 + grow, top + head * 2 + 2 - grow);
+          g.lineTo(cx + body / 2 + 4 + grow, top + h * 0.72 + grow);
+          g.lineTo(cx - body / 2 - 4 - grow, top + h * 0.72 + grow);
+          g.closePath();
+        } else {
+          g.roundRect(cx - body / 2 - grow, top + head * 2 + 2 - grow, body + 2 * grow, h * 0.45 + 2 * grow, 4);
+        }
+        g.fill();
+        g.fillStyle = skin;
+        g.save(); g.translate(cx - body / 2, top + head * 2 + 5); g.rotate((-step * Math.PI) / 60);
+        g.fillRect(-2 - grow, 0, 3.6 + 2 * grow, h * 0.32 + grow); g.restore();
+        g.beginPath(); g.arc(cx, top + head, head + grow, 0, Math.PI * 2); g.fill();
+        g.fillStyle = cloth;
+        g.beginPath(); g.arc(cx, top + head - 1.5, head * 0.9 + grow, Math.PI, 0); g.fill();
+        g.fillStyle = wood;
+        if (item === 0) { g.save(); g.translate(cx + body / 2 + 3, top - 6); g.rotate(0.12); g.fillRect(-1.5 - grow, -grow, 3 + 2 * grow, h + 6 + grow); g.restore(); }
+        if (item === 1) { g.beginPath(); g.ellipse(cx, top - 3, 8 + grow, 4 + grow, 0, 0, Math.PI * 2); g.fill(); }
+        if (item === 2) { g.beginPath(); g.arc(cx + body / 2 + 6, top + h * 0.55, 3.2 + grow, 0, Math.PI * 2); g.fill(); g.fillRect(cx + body / 2 + 4 - grow, top + h * 0.6, 4 + 2 * grow, h * 0.3 + grow); }
+        if (item === 3) { g.save(); g.translate(cx - body / 2 - 4, top + 6); g.rotate(-0.08); g.fillRect(-1.2 - grow, -grow, 2.4 + 2 * grow, h - 4 + grow); g.restore(); }
+      };
+      draw(2.2, OUT, OUT, OUT);
+      draw(0, "#f2f2f2", "#a9a9a9", "#6f6f6f");
+    }
+  }
+
+  // --- Habitations et feux (couleurs naturelles, non teintées)
+  const row = 2 * CELL;
+  const cell = (i: number, fn: () => void) => { g.save(); g.translate(i * CELL, row); fn(); g.restore(); };
+  cell(0, () => { // tente de peaux (climat froid)
+    g.fillStyle = OUT; g.beginPath(); g.moveTo(32, 4); g.lineTo(58, 60); g.lineTo(6, 60); g.closePath(); g.fill();
+    g.fillStyle = "#b89a72"; g.beginPath(); g.moveTo(32, 9); g.lineTo(54, 57); g.lineTo(10, 57); g.closePath(); g.fill();
+    g.strokeStyle = OUT; g.lineWidth = 2; g.beginPath(); g.moveTo(26, 2); g.lineTo(36, 14); g.moveTo(38, 2); g.lineTo(28, 14); g.stroke();
+    g.fillStyle = "#3a2a18"; g.beginPath(); g.moveTo(32, 36); g.lineTo(40, 57); g.lineTo(24, 57); g.closePath(); g.fill();
+  });
+  cell(1, () => { // hutte ronde au toit de chaume (tempéré/chaud)
+    g.fillStyle = OUT; g.fillRect(9, 32, 46, 28); g.beginPath(); g.moveTo(32, 4); g.lineTo(62, 36); g.lineTo(2, 36); g.closePath(); g.fill();
+    g.fillStyle = "#a8774a"; g.fillRect(12, 34, 40, 24);
+    g.fillStyle = "#d8b45e"; g.beginPath(); g.moveTo(32, 8); g.lineTo(58, 35); g.lineTo(6, 35); g.closePath(); g.fill();
+    g.fillStyle = "#3a2a18"; g.fillRect(27, 42, 10, 16);
+  });
+  cell(2, () => { // maison longue d'agriculteurs
+    g.fillStyle = OUT; g.fillRect(3, 30, 58, 30); g.beginPath(); g.moveTo(1, 32); g.lineTo(14, 12); g.lineTo(50, 12); g.lineTo(63, 32); g.closePath(); g.fill();
+    g.fillStyle = "#9c6b42"; g.fillRect(6, 32, 52, 26);
+    g.fillStyle = "#cfa95a"; g.beginPath(); g.moveTo(5, 31); g.lineTo(16, 15); g.lineTo(48, 15); g.lineTo(59, 31); g.closePath(); g.fill();
+    g.fillStyle = "#3a2a18"; g.fillRect(28, 42, 9, 16);
+  });
+  cell(3, () => { // grenier sur pilotis
+    g.fillStyle = OUT; g.fillRect(16, 46, 4, 14); g.fillRect(44, 46, 4, 14); g.fillRect(12, 24, 40, 24);
+    g.beginPath(); g.moveTo(32, 6); g.lineTo(56, 26); g.lineTo(8, 26); g.closePath(); g.fill();
+    g.fillStyle = "#b08050"; g.fillRect(15, 27, 34, 19);
+    g.fillStyle = "#dcb862"; g.beginPath(); g.moveTo(32, 10); g.lineTo(52, 25); g.lineTo(12, 25); g.closePath(); g.fill();
+  });
+  for (const [i, k] of [[4, 0], [5, 1]] as const) {
+    cell(i, () => { // feu de camp, deux images
+      g.fillStyle = "#3a2414"; g.save(); g.translate(32, 54); g.rotate(0.35); g.fillRect(-14, -3, 28, 6); g.rotate(-0.7); g.fillRect(-14, -3, 28, 6); g.restore();
+      const grd = g.createRadialGradient(32, 44, 2, 32, 44, 26);
+      grd.addColorStop(0, "rgba(255,200,90,0.55)"); grd.addColorStop(1, "rgba(255,120,30,0)");
+      g.fillStyle = grd; g.beginPath(); g.arc(32, 44, 26, 0, Math.PI * 2); g.fill();
+      g.fillStyle = "#ff8a1e"; g.beginPath(); g.moveTo(32, k ? 20 : 26); g.quadraticCurveTo(46, 44, 32, 54); g.quadraticCurveTo(18, 44, 32, k ? 20 : 26); g.fill();
+      g.fillStyle = "#ffd36a"; g.beginPath(); g.moveTo(32, k ? 34 : 30); g.quadraticCurveTo(39, 46, 32, 53); g.quadraticCurveTo(25, 46, 32, k ? 34 : 30); g.fill();
+    });
+  }
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
+  t.minFilter = THREE.LinearMipmapLinearFilter;
+  t.magFilter = THREE.LinearFilter;
   return t;
 }
 
 const vertexShader = /* glsl */ `
   attribute vec3 color;
   attribute float seed;
+  attribute float variant;   // 0–7 personnage ; 16 tente ; 17 hutte ; 18 maison longue ; 19 grenier ; 20 feu
   uniform float uTime;
-  uniform float uSize;
-  uniform float uPixelRatio;
+  uniform float uScale;
+  uniform float uWorldSize;
+  uniform float uAnimate;
   varying vec3 vColor;
   varying float vFacing;
+  varying vec2 vCell;
+  varying float vFade;
   void main() {
     vec3 n = normalize(position);
     vec3 up = abs(n.y) > 0.98 ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 1.0, 0.0);
     vec3 t1 = normalize(cross(n, up));
     vec3 t2 = cross(n, t1);
-    float a = uTime * (0.35 + 0.3 * fract(seed * 7.13)) + seed * 6.2831;
-    vec3 p = position + (t1 * sin(a) + t2 * cos(a * 0.8)) * 0.0011;
+    bool walker = variant < 8.0;
+    float a = uTime * (0.25 + 0.2 * fract(seed * 7.13)) + seed * 6.2831;
+    vec3 p = position + (walker ? (t1 * sin(a) + t2 * cos(a * 0.8)) * 0.0006 * uAnimate : vec3(0.0));
     vec4 mv = modelViewMatrix * vec4(p, 1.0);
     vFacing = dot(normalize(normalMatrix * n), normalize(-mv.xyz));
+    float size = uWorldSize * (walker ? 1.0 : 1.5) * uScale / -mv.z;
+    vFade = smoothstep(4.0, 10.0, size);
+    gl_PointSize = clamp(size, 0.0, 110.0);
+    float idx;
+    if (walker) {
+      idx = variant * 2.0 + mod(floor(uTime * 3.0 * uAnimate + seed * 10.0), 2.0);
+    } else if (variant >= 20.0) {
+      idx = 20.0 + mod(floor(uTime * 6.0 * uAnimate + seed * 10.0), 2.0);
+    } else {
+      idx = variant;
+    }
+    vCell = vec2(mod(idx, ${COLS}.0), floor(idx / ${COLS}.0));
     vColor = color;
-    gl_PointSize = uSize * uPixelRatio;
     gl_Position = projectionMatrix * mv;
   }
 `;
 
 const fragmentShader = /* glsl */ `
   uniform sampler2D uMap;
-  uniform float uOpacity;
   varying vec3 vColor;
   varying float vFacing;
+  varying vec2 vCell;
+  varying float vFade;
   void main() {
-    if (vFacing < 0.05) discard;               // face cachée du globe
-    vec4 tex = texture2D(uMap, gl_PointCoord);
-    if (tex.a < 0.35) discard;
-    float rim = smoothstep(0.05, 0.35, vFacing); // s'estompe vers l'horizon
-    gl_FragColor = vec4(vColor * tex.rgb, tex.a * uOpacity * rim);
+    if (vFacing < 0.05 || vFade < 0.01) discard;
+    vec2 uv = (vCell + gl_PointCoord) / vec2(${COLS}.0, ${ROWS}.0);
+    uv.y = 1.0 - uv.y;
+    vec4 tex = texture2D(uMap, uv);
+    if (tex.a < 0.3) discard;
+    float rim = smoothstep(0.05, 0.3, vFacing);
+    gl_FragColor = vec4(tex.rgb * vColor, tex.a * rim * vFade);
   }
 `;
 
 export class Bands {
   readonly points: THREE.Points;
-  readonly huts: THREE.Points;
-  private hutGeometry = new THREE.BufferGeometry();
-  private hutMaterial: THREE.ShaderMaterial;
-  private hutPositions = new Float32Array(MAX_SPRITES * 3);
-  private hutColors = new Float32Array(MAX_SPRITES * 3);
-  private hutSeeds = new Float32Array(MAX_SPRITES);
   private geometry = new THREE.BufferGeometry();
   private material: THREE.ShaderMaterial;
   private positions = new Float32Array(MAX_SPRITES * 3);
   private colors = new Float32Array(MAX_SPRITES * 3);
   private seeds = new Float32Array(MAX_SPRITES);
+  private variants = new Float32Array(MAX_SPRITES);
   peoplePerSprite = 25;
 
   constructor(pixelRatio: number) {
-    this.geometry.setAttribute("position", new THREE.BufferAttribute(this.positions, 3).setUsage(THREE.DynamicDrawUsage));
-    this.geometry.setAttribute("color", new THREE.BufferAttribute(this.colors, 3).setUsage(THREE.DynamicDrawUsage));
-    this.geometry.setAttribute("seed", new THREE.BufferAttribute(this.seeds, 1).setUsage(THREE.DynamicDrawUsage));
+    const attrs: [string, Float32Array, number][] = [["position", this.positions, 3], ["color", this.colors, 3], ["seed", this.seeds, 1], ["variant", this.variants, 1]];
+    for (const [name, arr, size] of attrs) {
+      this.geometry.setAttribute(name, new THREE.BufferAttribute(arr, size).setUsage(THREE.DynamicDrawUsage));
+    }
     this.geometry.setDrawRange(0, 0);
     this.material = new THREE.ShaderMaterial({
       vertexShader,
@@ -144,49 +214,55 @@ export class Bands {
       transparent: true,
       depthWrite: false,
       uniforms: {
-        uMap: { value: silhouetteTexture() },
+        uMap: { value: makeAtlas() },
         uTime: { value: 0 },
-        uSize: { value: 26 },
-        uPixelRatio: { value: pixelRatio },
-        uOpacity: { value: 1 },
+        uScale: { value: 800 * pixelRatio },
+        uWorldSize: { value: WORLD_SIZE },
+        uAnimate: { value: 1 },
       },
     });
     this.points = new THREE.Points(this.geometry, this.material);
     this.points.frustumCulled = false;
     this.points.renderOrder = 2;
-    // Villages (S2) : là où l'on cultive, une partie des silhouettes devient des huttes immobiles
-    this.hutGeometry.setAttribute("position", new THREE.BufferAttribute(this.hutPositions, 3).setUsage(THREE.DynamicDrawUsage));
-    this.hutGeometry.setAttribute("color", new THREE.BufferAttribute(this.hutColors, 3).setUsage(THREE.DynamicDrawUsage));
-    this.hutGeometry.setAttribute("seed", new THREE.BufferAttribute(this.hutSeeds, 1).setUsage(THREE.DynamicDrawUsage));
-    this.hutGeometry.setDrawRange(0, 0);
-    this.hutMaterial = this.material.clone();
-    this.hutMaterial.uniforms.uMap = { value: hutTexture() };
-    this.hutMaterial.uniforms.uTime = { value: 0 };
-    this.huts = new THREE.Points(this.hutGeometry, this.hutMaterial);
-    this.huts.frustumCulled = false;
-    this.huts.renderOrder = 2;
   }
 
-  /** Recalcule les silhouettes pour une frame. Renvoie le nombre de personnes par silhouette. */
-  update(data: RunData, frame: number): number {
+  /** Échelle de projection : pixels par unité de distance, d'après la hauteur d'écran et le champ de vision. */
+  setViewport(heightPx: number, fovDeg: number, pixelRatio: number) {
+    this.material.uniforms.uScale.value = (heightPx * pixelRatio) / (2 * Math.tan((fovDeg * Math.PI) / 360));
+  }
+
+  /** focus : en vue rapprochée, on ne garnit que la région regardée, avec plus de figures par
+   *  personne réelle (même données, représentation plus fine). */
+  update(data: RunData, frame: number, focus?: { lat: number; lon: number; radiusDeg: number }): number {
     const { ny, nx, res } = data.manifest.grid;
     const plane = ny * nx;
     const off = frame * 3 * plane;
     const base = data.frames.subarray(off, off + plane);
     const layers = [data.frames.subarray(off + plane, off + 2 * plane), data.frames.subarray(off + 2 * plane, off + 3 * plane)];
+    const temp = data.climate ? data.climate.subarray(off, off + plane) : null;
     const { density_lo: lo, density_hi: hi } = data.manifest.frames;
     const llo = Math.log10(lo);
     const span = Math.log10(hi) - llo;
+    const nExtra = data.manifest.extra?.layers.length ?? 0;
+    const agriIdx = data.manifest.extra?.layers.findIndex((l) => l.id === "agri") ?? -1;
+    const agri = agriIdx >= 0 && data.extra ? data.extra.subarray(frame * nExtra * plane + agriIdx * plane, frame * nExtra * plane + (agriIdx + 1) * plane) : null;
 
-    // Effectifs par cellule (densité déquantifiée × surface)
     const people: Float32Array[] = layers.map(() => new Float32Array(plane));
     let total = 0;
+    const cosR = focus ? Math.cos((focus.radiusDeg * Math.PI) / 180) : -2;
+    const fla = focus ? (focus.lat * Math.PI) / 180 : 0, flo = focus ? (focus.lon * Math.PI) / 180 : 0;
     for (let i = 0; i < ny; i++) {
       const lat = 90 - res * (i + 0.5);
       const area = (KM_PER_DEG * res) ** 2 * Math.cos((lat * Math.PI) / 180);
+      const la = (lat * Math.PI) / 180;
       for (let j = 0; j < nx; j++) {
         const k = i * nx + j;
         if (!(base[k] & 1) || base[k] & 2) continue;
+        if (focus) {
+          const lo = ((-180 + res * (j + 0.5)) * Math.PI) / 180;
+          const cosd = Math.sin(fla) * Math.sin(la) + Math.cos(fla) * Math.cos(la) * Math.cos(lo - flo);
+          if (cosd < cosR) continue;
+        }
         for (let L = 0; L < 2; L++) {
           const q = layers[L][k];
           if (!q) continue;
@@ -196,82 +272,59 @@ export class Bands {
         }
       }
     }
-    const target = total / (MAX_SPRITES * 0.85);
-    const S = NICE.find((v) => v >= target) ?? NICE[NICE.length - 1];
+    const S = (focus ? [5, 10, ...NICE] : NICE).find((v) => v >= total / (MAX_SPRITES * 0.8)) ?? NICE[NICE.length - 1];
     this.peoplePerSprite = S;
 
-    const nExtra = data.manifest.extra?.layers.length ?? 0;
-    const agriIdx = data.manifest.extra?.layers.findIndex((l) => l.id === "agri") ?? -1;
-    const agri = agriIdx >= 0 && data.extra ? data.extra.subarray(frame * nExtra * plane + agriIdx * plane, frame * nExtra * plane + (agriIdx + 1) * plane) : null;
     let count = 0;
-    let hutCount = 0;
+    const put = (lat: number, lon: number, col: THREE.Color, seed: number, variant: number) => {
+      const la = (lat * Math.PI) / 180, lo2 = (lon * Math.PI) / 180;
+      this.positions.set([RADIUS * Math.cos(la) * Math.cos(lo2), RADIUS * Math.sin(la), -RADIUS * Math.cos(la) * Math.sin(lo2)], count * 3);
+      this.colors.set([col.r, col.g, col.b], count * 3);
+      this.seeds[count] = seed;
+      this.variants[count] = variant;
+      count++;
+    };
     outer: for (let i = 0; i < ny; i++) {
       const lat0 = 90 - res * (i + 0.5);
       for (let j = 0; j < nx; j++) {
         const k = i * nx + j;
+        const T = temp && temp[k] ? -40 + (75 * (temp[k] - 1)) / 254 : 15;
         for (let L = 0; L < 2; L++) {
           const n = people[L][k];
           if (!n) continue;
-          // Arrondi stochastique mais stable : la fraction restante décide d'une silhouette de plus
           const exact = n / S;
           const m = Math.min(MAX_PER_CELL, Math.floor(exact) + (hash(i, j, 999 + L) < exact % 1 ? 1 : 0));
+          const farm = L === 0 && agri && agri[k] ? (agri[k] - 1) / 254 : 0;
           for (let s = 0; s < m; s++) {
-            if (count >= MAX_SPRITES) break outer;
-            const farm = L === 0 && agri && agri[k] ? (agri[k] - 1) / 254 : 0;
+            if (count >= MAX_SPRITES - 2) break outer;
             const lat = lat0 + (hash(i, j, s * 2 + L * 101) - 0.5) * res * 0.95;
             const lon = -180 + res * (j + 0.5) + (hash(j, i, s * 2 + 1 + L * 101) - 0.5) * res * 0.95;
-            const la = (lat * Math.PI) / 180;
-            const lo2 = (lon * Math.PI) / 180;
-            // Même convention que la texture du globe : longitude 0 sur +X, 90°E vers −Z
-            const x = RADIUS * Math.cos(la) * Math.cos(lo2);
-            const yv = RADIUS * Math.sin(la);
-            const z = -RADIUS * Math.cos(la) * Math.sin(lo2);
-            if (farm > 0.3 && hash(i, j, s + 555) < farm * 0.5) {
-              // Une hutte pour plusieurs silhouettes : on regroupe les agriculteurs en villages
-              this.hutPositions.set([x, yv, z], hutCount * 3);
-              this.hutColors.set([FARM.r, FARM.g, FARM.b], hutCount * 3);
-              this.hutSeeds[hutCount] = 0;
-              hutCount++;
-              continue;
+            const seed = hash(i, j, s + 7);
+            const roll = hash(i, j, s + 555);
+            if (farm > 0.3 && roll < farm * 0.45) {
+              put(lat, lon, WHITE, seed, roll < farm * 0.12 ? 19 : 18); // village : maisons longues, greniers
+            } else if (roll > 0.82) {
+              put(lat, lon, WHITE, seed, 20); // campement : un feu et un abri adapté au climat
+              put(lat + 0.04, lon + 0.05, WHITE, seed, T < 5 ? 16 : 17);
+            } else {
+              put(lat, lon, L === 0 ? SAPIENS : ARCHAIC, seed, Math.floor(seed * 8));
             }
-            this.positions[count * 3] = x;
-            this.positions[count * 3 + 1] = yv;
-            this.positions[count * 3 + 2] = z;
-            const col = L === 0 ? SAPIENS : ARCHAIC;
-            this.colors[count * 3] = col.r;
-            this.colors[count * 3 + 1] = col.g;
-            this.colors[count * 3 + 2] = col.b;
-            this.seeds[count] = hash(i, j, s + 7);
-            count++;
           }
         }
       }
     }
     this.geometry.setDrawRange(0, count);
-    for (const name of ["position", "color", "seed"]) (this.geometry.getAttribute(name) as THREE.BufferAttribute).needsUpdate = true;
-    this.hutGeometry.setDrawRange(0, hutCount);
-    for (const name of ["position", "color", "seed"]) (this.hutGeometry.getAttribute(name) as THREE.BufferAttribute).needsUpdate = true;
+    for (const name of ["position", "color", "seed", "variant"]) (this.geometry.getAttribute(name) as THREE.BufferAttribute).needsUpdate = true;
     return S;
   }
 
-  /** À appeler à chaque image : animation d'attente et apparition selon le zoom. */
-  tick(seconds: number, cameraDistance: number, visible: boolean, animate: boolean) {
-    if (animate) this.material.uniforms.uTime.value = seconds;
-    // Discrètes vues de loin, nettes quand on s'approche de la surface
-    const zoom = Math.min(1, Math.max(0, (4.6 - cameraDistance) / 3.0));
-    // Invisibles en vue d'ensemble (la couleur du sol montre déjà la densité), nettes de près
-    this.material.uniforms.uOpacity.value = visible ? Math.min(1, Math.max(0, (zoom - 0.12) * 2.2)) : 0;
-    this.material.uniforms.uSize.value = 3.5 + 16 * zoom * zoom;
+  tick(seconds: number, _cameraDistance: number, visible: boolean, animate: boolean) {
+    this.material.uniforms.uTime.value = seconds;
+    this.material.uniforms.uAnimate.value = animate ? 1 : 0;
     this.points.visible = visible;
-    this.hutMaterial.uniforms.uOpacity.value = this.material.uniforms.uOpacity.value;
-    this.hutMaterial.uniforms.uSize.value = this.material.uniforms.uSize.value * 1.25;
-    this.huts.visible = visible;
   }
 
   dispose() {
-    this.hutGeometry.dispose();
-    (this.hutMaterial.uniforms.uMap.value as THREE.Texture).dispose();
-    this.hutMaterial.dispose();
     this.geometry.dispose();
     (this.material.uniforms.uMap.value as THREE.Texture).dispose();
     this.material.dispose();

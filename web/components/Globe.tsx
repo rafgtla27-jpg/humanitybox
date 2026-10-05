@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { Bands } from "@/lib/bands";
+import { H as RH, W as RW, loadRelief, paintRelief, type Relief } from "@/lib/relief";
 import { paintFrame, type Layer, type RunData } from "@/lib/paint";
 
 type Props = {
@@ -54,8 +55,15 @@ function directionFor(lonDeg: number, latDeg: number) {
 
 export default function Globe({ data, frame, layer, space = false, className = "globe", onError, sprites = false, onSpriteScale }: Props) {
   const mountRef = useRef<HTMLDivElement>(null);
+  const frameRef = useRef(frame);
+  frameRef.current = frame;
+  const refreshRef = useRef<() => void>(() => {});
   const paintRef = useRef<{ canvas: HTMLCanvasElement; texture: THREE.CanvasTexture; render: () => void; bands: Bands | null } | null>(null);
   const showBands = useRef(layer === "humans");
+  const [relief, setRelief] = useState<Relief | null>(null);
+  useEffect(() => {
+    if (space) loadRelief().then(setRelief).catch(() => setRelief(null));
+  }, [space]);
   showBands.current = layer === "humans";
 
   // Scène créée une fois par run
@@ -76,16 +84,19 @@ export default function Globe({ data, frame, layer, space = false, className = "
     mount.appendChild(renderer.domElement);
 
     const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 100);
+    const camera = new THREE.PerspectiveCamera(32, 1, 0.002, 100); // plan proche minuscule : on peut frôler le sol
     camera.position.copy(directionFor(START_LON, START_LAT).multiplyScalar(3.6));
 
     const canvas = document.createElement("canvas");
-    canvas.width = nx;
-    canvas.height = ny;
+    // Taille fixée une fois pour toutes (une texture WebGL ne change pas de taille) :
+    // carte détaillée en mode espace, grille de simulation sinon.
+    canvas.width = space ? RW : nx;
+    canvas.height = space ? RH : ny;
     const texture = new THREE.CanvasTexture(canvas);
     texture.colorSpace = THREE.SRGBColorSpace;
     texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
-    texture.magFilter = THREE.NearestFilter;
+    texture.magFilter = THREE.LinearFilter;
+    texture.minFilter = THREE.LinearMipmapLinearFilter;
 
     const material = space ? new THREE.MeshLambertMaterial({ map: texture }) : new THREE.MeshBasicMaterial({ map: texture });
     const globe = new THREE.Mesh(new THREE.SphereGeometry(1, 192, 128), material);
@@ -124,18 +135,32 @@ export default function Globe({ data, frame, layer, space = false, className = "
     scene.add(atmosphere);
 
     const bands = sprites ? new Bands(renderer.getPixelRatio()) : null;
-    if (bands) {
-      scene.add(bands.points);
-      scene.add(bands.huts);
-    }
+    if (bands) scene.add(bands.points);
     const animate = !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const clock = new THREE.Clock();
 
     const controls = new OrbitControls(camera, renderer.domElement);
+    // Niveau de détail des figures : de près, on ne garnit que la région regardée, plus finement
+    const refresh = () => {
+      if (!bands) return;
+      const d = camera.position.length();
+      let focus: { lat: number; lon: number; radiusDeg: number } | undefined;
+      if (d < 1.8) {
+        const v = camera.position.clone().normalize();
+        focus = {
+          lat: (Math.asin(v.y) * 180) / Math.PI,
+          lon: (Math.atan2(-v.z, v.x) * 180) / Math.PI,
+          radiusDeg: Math.min(60, 4 + (d - 1) * 70),
+        };
+      }
+      onSpriteScale?.(bands.update(data, frameRef.current, focus));
+    };
+    refreshRef.current = refresh;
+    controls.addEventListener("end", refresh);
     controls.enableDamping = true;
     controls.dampingFactor = 0.08;
     controls.enablePan = false;
-    controls.minDistance = 1.35;
+    controls.minDistance = 1.025; // jusqu'à ~150 km du sol : on voit les gens
     controls.rotateSpeed = 0.5;
     controls.zoomSpeed = 0.6;
 
@@ -144,7 +169,8 @@ export default function Globe({ data, frame, layer, space = false, className = "
     const loop = () => {
       raf = requestAnimationFrame(loop);
       // Rotation plus lente quand on est proche de la surface
-      controls.rotateSpeed = 0.15 + 0.35 * Math.min(1, (camera.position.length() - 1) / 2.5);
+      controls.rotateSpeed = 0.03 + 0.47 * Math.min(1, (camera.position.length() - 1) / 2.5);
+      controls.zoomSpeed = 0.25 + 0.5 * Math.min(1, (camera.position.length() - 1) / 1.5);
       controls.update();
       bands?.tick(clock.getElapsedTime(), camera.position.length(), showBands.current, animate);
       render();
@@ -162,6 +188,7 @@ export default function Globe({ data, frame, layer, space = false, className = "
       renderer.domElement.style.height = "100%";
       camera.aspect = w / Math.max(1, h);
       camera.updateProjectionMatrix();
+      bands?.setViewport(h, camera.fov, renderer.getPixelRatio());
       if (!userMoved && w > 0 && h > 0) {
         // Distance qui fait tenir le globe entier, avec une marge, quelle que soit la forme de l'écran
         const v = (camera.fov * Math.PI) / 180;
@@ -202,15 +229,28 @@ export default function Globe({ data, frame, layer, space = false, className = "
   useEffect(() => {
     const p = paintRef.current;
     if (!p) return;
-    const { nx, ny } = data.manifest.grid;
     const ctx = p.canvas.getContext("2d")!;
-    const img = ctx.createImageData(nx, ny);
-    paintFrame(data, frame, layer, img.data, 0, undefined, { naturalGround: !!p.bands });
-    ctx.putImageData(img, 0, 0);
+    if (relief && p.canvas.width === RW) {
+      // Carte détaillée : relief 15′, côtes dynamiques, biomes, champs, lavis humain
+      const img = ctx.createImageData(RW, RH);
+      paintRelief(relief, data, frame, layer, img.data);
+      ctx.putImageData(img, 0, 0);
+    } else {
+      const { nx, ny } = data.manifest.grid;
+      const small = document.createElement("canvas");
+      small.width = nx;
+      small.height = ny;
+      const sctx = small.getContext("2d")!;
+      const img = sctx.createImageData(nx, ny);
+      paintFrame(data, frame, layer, img.data, 0, undefined, { naturalGround: !!p.bands });
+      sctx.putImageData(img, 0, 0);
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(small, 0, 0, p.canvas.width, p.canvas.height);
+    }
     p.texture.needsUpdate = true;
-    if (p.bands) onSpriteScale?.(p.bands.update(data, frame));
+    if (p.bands) refreshRef.current();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data, frame, layer]);
+  }, [data, frame, layer, relief]);
 
   return (
     <figure className={className} ref={mountRef} role="img" aria-label="Globe : faites glisser pour tourner, molette ou pincement pour zoomer" />
