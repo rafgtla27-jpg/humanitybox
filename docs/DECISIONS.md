@@ -462,3 +462,22 @@ Tour 2 : paramètres eurasiens ramenés autour de s23, navigation libre.
 **Viewer** : « Aucun run disponible » sur Vercel — des variables Supabase sont configurées, la
 base est vide, et le viewer n'affichait alors que Supabase. Corrigé : les runs de démonstration
 sont toujours listés en premier, ceux de Supabase s'y ajoutent.
+
+**Calibration D, tour 2 (0.5.1)** — choix s29 (adv 0,316 ; cx_n0 817 ; neanderthal_C 0,242 ;
+marine 0,041 ; boat_s 0,219 ; sea_ref 0,131), 20 mondes : entraînement 51 %, test 25 %.
+Australie 75 % (49,8k) ; mais Europe 90,5k, Arctique 64,5k (0 % chacun), Japon 58k (test, trop tôt).
+Trajet tracé sur le vrai climat (seed 1) : sapiens longe la côte d'Afrique du Nord dès 108k, son
+savoir maritime au Maghreb monte à 0,19–0,27 pour un répertoire de 0,85, et il franchit Gibraltar
+vers 98k ; l'Andalousie est peuplée, puis toute l'Ibérie. L'Anatolie n'est qu'effleurée.
+Diagnostic de structure : dans le modèle, les populations du Maghreb sont culturellement plus riches
+(répertoire ~0,85, réseau dense) que les pionniers d'Asie du Sud-Est. Tout seuil de navigation qui
+laisse passer Wallacea laisse donc passer Gibraltar, malgré une exposition maritime deux à trois
+fois plus faible. Et une fois en Ibérie, l'écart de répertoire avec les Néandertaliens (0,85 contre
+0,24) fait gagner sapiens dès ~95k.
+C'est aussi une question ouverte de l'archéologie : pourquoi aucune traversée précoce à
+Gibraltar, alors que Sahul a été atteint ? Hypothèses débattues : courants du détroit,
+résistance des Néandertaliens d'Ibérie, effondrements démographiques nord-africains (MIS 4).
+Décision proposée : arrêter la calibration de la dispersion (rendement décroissant) ; garder C
+(0.4.9, validé partiellement) et D (0.5.1, meilleur pour l'Australie) comme deux hypothèses
+documentées ; tester les explications de Gibraltar comme des EXPÉRIENCES nommées (contrefactuels),
+pas comme des réglages cachés.
