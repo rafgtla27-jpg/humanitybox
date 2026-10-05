@@ -523,3 +523,25 @@ devient des huttes de village ; le monde E est la simulation d'accueil.
   figure (jusqu'à 5) — mêmes données, représentation plus fine.
 Décision jeu : god game à la WorldBox avec un peuple de cœur. Condition technique majeure : passer
 d'un site qui rejoue des simulations à un moteur qui tourne en direct (piste G1).
+
+**Viewer 0.6.1 — pixel art procédural et vraie logique de village**
+Inspirations : la génération de villages « par croissance depuis une graine », avec parcelles autour
+des bâtiments (Emilien et al., 2012), et le zonage « centre dense, périphérie lâche, type de
+bâtiment selon la distance au centre » des générateurs de jeux de gestion.
+- Sprites : atlas de pixel art 16 px entièrement généré par le code (8 personnages : teint,
+  coiffure, carrure, robe ou tunique, lance / panier / bâton, deux pas de marche ; tente, hutte,
+  maison, maison longue, grenier sur pilotis, puits, enclos à moutons, totem, feu animé), contour
+  d'un pixel, filtrage net. Vêtements en couleur-clé remplacée par la teinture du peuple (par
+  grande région, en attendant les peuples émergents de G3).
+- Logique d'établissement, déduite de chaque cellule simulée : chasseurs-cueilleurs → campements
+  (feu central, 2–4 abris en cercle, tentes s'il fait moins de 5 °C) ; agriculteurs → villages
+  (place et puits, maisons en spirale d'angle d'or, maisons longues au centre, greniers et enclos en
+  lisière, totem au-delà de 12 maisons, 3–5 chemins rayonnants, champs en parcelles colorées selon la
+  culture). Graines stables : un village grandit d'une image à l'autre au lieu de se redessiner.
+  Aucun bâtiment dans la mer (relief 15′ + niveau marin du moment).
+- Rendu : bâtiments et gens en panneaux pixel art, champs, place et chemins en décalques posés à
+  plat sur le globe. Visible seulement en vue rapprochée (moins de ~2 800 km d'altitude).
+Le moteur en direct (G1) n'est pas commencé dans cette version : priorité donnée au rendu jugé laid.
+Plan G1 : (1) « cuire » l'environnement (capacité d'accueil, passages, glaces, potentiel agricole,
+indice d'archipel) aux 72 tranches climatiques ; (2) porter la démographie, la migration et les
+traits culturels en TypeScript dans un Web Worker ; (3) brancher les premiers pouvoirs.

@@ -78,7 +78,7 @@ pouvoirs (création, catastrophes, bénédictions, déplacer des unités) ; le m
 Ce qu'on garde de WORLD_SIM : un monde réel et des causes logiques ; le joueur agit sur les causes
 (climat, fertilité, catastrophes), pas sur des barres de vie.
 
-- **G0 — Monde lisible** (fait, viewer 0.6.0) : relief 15′, côtes dynamiques, biomes, champs,
+- **G0 — Monde lisible** (fait, viewer 0.6.0–0.6.1 : + pixel art procédural, campements et villages générés depuis la simulation) : relief 15′, côtes dynamiques, biomes, champs,
   personnages procéduraux à l'échelle, niveau de détail en vue rapprochée.
 - **G1 — Moteur en direct** (prochain gros chantier) : aujourd'hui le site REJOUE des simulations
   calculées à l'avance ; un dieu doit pouvoir agir pendant que le monde tourne. Portage du moteur

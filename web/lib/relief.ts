@@ -71,7 +71,7 @@ const RAINFOREST = hex("#2c5a2d"), TUNDRA = hex("#8f9682"), TAIGA = hex("#4f6347
 const FARM = hex("#c9c06a"), RIVER = hex("#5aa3cf"), GLOW = hex("#e8b060"), ARCH = hex("#b9d8a0");
 const SHALLOW = hex("#3d8fb0"), MID = hex("#1d5b82"), DEEP = hex("#0b2a45");
 
-function seaLevelAt(data: RunData, year: number): number {
+export function seaLevelAt(data: RunData, year: number): number {
   const f = data.manifest.forcing;
   const xs = f.years, ys = f.sea_level;
   if (year <= xs[0]) return ys[0];

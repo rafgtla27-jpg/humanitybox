@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { Bands } from "@/lib/bands";
-import { H as RH, W as RW, loadRelief, paintRelief, type Relief } from "@/lib/relief";
+import { H as RH, W as RW, loadRelief, paintRelief, seaLevelAt, type Relief } from "@/lib/relief";
 import { paintFrame, type Layer, type RunData } from "@/lib/paint";
 
 type Props = {
@@ -61,6 +61,8 @@ export default function Globe({ data, frame, layer, space = false, className = "
   const paintRef = useRef<{ canvas: HTMLCanvasElement; texture: THREE.CanvasTexture; render: () => void; bands: Bands | null } | null>(null);
   const showBands = useRef(layer === "humans");
   const [relief, setRelief] = useState<Relief | null>(null);
+  const reliefRef = useRef<Relief | null>(null);
+  reliefRef.current = relief;
   useEffect(() => {
     if (space) loadRelief().then(setRelief).catch(() => setRelief(null));
   }, [space]);
@@ -135,7 +137,7 @@ export default function Globe({ data, frame, layer, space = false, className = "
     scene.add(atmosphere);
 
     const bands = sprites ? new Bands(renderer.getPixelRatio()) : null;
-    if (bands) scene.add(bands.points);
+    if (bands) scene.add(bands.group);
     const animate = !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const clock = new THREE.Clock();
 
@@ -144,13 +146,23 @@ export default function Globe({ data, frame, layer, space = false, className = "
     const refresh = () => {
       if (!bands) return;
       const d = camera.position.length();
-      let focus: { lat: number; lon: number; radiusDeg: number } | undefined;
-      if (d < 1.8) {
+      let focus: { lat: number; lon: number; radiusDeg: number; isLand?: (lat: number, lon: number) => boolean } | undefined;
+      if (d < 1.45) {
         const v = camera.position.clone().normalize();
+        const rel = reliefRef.current;
+        const sea = seaLevelAt(data, data.manifest.frames.years[frameRef.current]);
         focus = {
           lat: (Math.asin(v.y) * 180) / Math.PI,
           lon: (Math.atan2(-v.z, v.x) * 180) / Math.PI,
-          radiusDeg: Math.min(60, 4 + (d - 1) * 70),
+          radiusDeg: Math.min(30, 3 + (d - 1) * 55),
+          // pas de village dans la mer : on consulte le relief fin (15′) et le niveau marin du moment
+          isLand: rel
+            ? (lat: number, lon: number) => {
+                const y = Math.min(RH - 1, Math.max(0, Math.floor((90 - lat) * 4)));
+                const x = (((Math.floor((lon + 180) * 4)) % RW) + RW) % RW;
+                return rel.elev[y * RW + x] > sea;
+              }
+            : undefined,
         };
       }
       onSpriteScale?.(bands.update(data, frameRef.current, focus));
