@@ -27,6 +27,8 @@ SCENARIOS = {
     "B": ("Eurasie habitée (α 0.9 / 1.1)", dict(archaics=True, alpha_sa=0.9, alpha_as=1.1)),
     "C": ("Eurasie habitée, avantage culturel émergent", dict(archaics=True, complexity=True, archaic_C=0.1, neanderthal_C=0.241)),
     "D": ("C + navigation régionale (V0.5)", dict(archaics=True, complexity=True, maritime=True, archaic_C=0.1, neanderthal_C=0.241)),
+    "E": ("D + agriculture, jusqu'à aujourd'hui (V0.5)", dict(archaics=True, complexity=True, maritime=True, agriculture=True,
+                                                          archaic_C=0.1, neanderthal_C=0.242)),
 }
 
 
@@ -46,6 +48,8 @@ def main():
     ap.add_argument("--end", type=int, default=-10_000, help="fin de la simulation (années, négatif) — tests rapides")
     ap.add_argument("--out", default="outputs", help="dossier de sortie")
     a = ap.parse_args()
+    if a.scenario == "E" and a.end == -10_000:
+        a.end = 0  # l'agriculture se joue à l'Holocène : on simule jusqu'à aujourd'hui
     global OUT
     OUT = Path(a.out)
 
@@ -97,6 +101,8 @@ def main():
         for row in manifest["regions"]:
             print(f"    {row['region'][:34]:<36} {str(row['model_bp']):>8}  {row['verdict']:<10} part max sapiens {row.get('share_max', 0):.0%}")
         print(f"    population sapiens finale : {r.tracker.total[-1]:,.0f}".replace(",", " "))
+        for f in (manifest.get("agri_foci") or []):
+            print(f"    foyer agricole {f['focus'][:30]:<32} {str(f['model_bp']):>8}  {f['verdict']}")
         if a.publish:
             from worldsim.publish import SupabaseError, configured, publish_run
             if not configured():

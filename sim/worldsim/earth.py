@@ -68,6 +68,14 @@ _MONSOON_MAX_KYR = np.array([150, 128, 106, 84, 60, 37, 11, -12])
 _MONSOON_AMP = np.array([0.5, 1.0, 0.85, 0.8, 0.5, 0.35, 0.7, 0.5])
 
 
+def climate_variability(year: int) -> float:
+    """Variabilité climatique millénaire (forçage, d'après les carottes de glace du Groenland) :
+    forte pendant toute la dernière glaciation (événements de Dansgaard-Oeschger), faible pendant
+    les interglaciaires stables (Éémien jusqu'à ~116k, Holocène depuis 11 700 ans). Les données
+    Beyer, au pas de 1 000 à 2 000 ans, ne voient pas ces oscillations : on les ajoute ici."""
+    return 0.15 if (year >= -11_700 or year <= -116_000) else 1.0
+
+
 def monsoon_index(year: int) -> float:
     kyr = -year / 1000
     m = _MONSOON_MAX_KYR

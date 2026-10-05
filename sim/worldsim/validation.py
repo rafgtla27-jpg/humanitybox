@@ -100,3 +100,40 @@ class RegionTracker:
             rows.append({"region": r.name, "model_bp": bp, "target": r.target, "verdict": verdict, "note": r.note,
                          "share_max": round(self.share_max[r.name], 3)})
         return rows
+
+
+# --- V0.5 : foyers agricoles (indicatifs : on vérifie une logique, pas une date au siècle près)
+AGRI_FOCI = [
+    ("Croissant fertile", (30, 38, 35, 48), (11_500, 9_500)),
+    ("Chine (Fleuve Jaune / Yangtsé)", (27, 40, 105, 122), (10_000, 7_500)),
+    ("Nouvelle-Guinée", (-8, -3, 138, 150), (10_000, 6_500)),
+    ("Mésoamérique", (14, 22, -105, -88), (10_000, 6_000)),
+    ("Andes", (-18, -5, -80, -65), (9_000, 5_000)),
+    ("Sahel / Afrique de l'Ouest", (8, 16, -10, 20), (5_000, 3_000)),
+    ("Inde (Gange)", (22, 30, 75, 90), (9_000, 5_000)),
+]
+
+
+class AgriTracker:
+    """Première date où l'agriculture dépasse 0,3 dans au moins 3 cellules de chaque foyer."""
+
+    def __init__(self, grid):
+        self.masks = {n: grid.box(*b) for n, b, _ in AGRI_FOCI}
+        self.first: dict[str, int | None] = {n: None for n, _, _ in AGRI_FOCI}
+
+    def __call__(self, sim, year):
+        A = sim.state.get("agri:N")
+        if A is None:
+            return
+        for n, m in self.masks.items():
+            if self.first[n] is None and int(((A > 0.3) & m).sum()) >= 3:
+                self.first[n] = year
+
+    def report(self):
+        out = []
+        for n, _, (old, young) in AGRI_FOCI:
+            y = self.first[n]
+            bp = None if y is None else -y
+            out.append({"focus": n, "model_bp": bp, "reference": [old, young],
+                        "verdict": "jamais" if bp is None else ("OK" if young <= bp <= old else ("trop tôt" if bp > old else "trop tard"))})
+        return out

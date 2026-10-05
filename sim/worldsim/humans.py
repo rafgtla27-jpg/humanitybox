@@ -64,6 +64,12 @@ class HumanParams:
     boat_s: float = 0.3         # savoir maritime à partir duquel on traverse
     sea_tau_gain: float = 3000.0
     sea_tau_loss: float = 6000.0
+    # --- V0.5 : agriculture (logique avant réalisme : voir DECISIONS, « tournant jeu »)
+    agriculture: bool = False
+    farm_density: float = 2.0   # hab/km² nourris par une agriculture pleinement développée (×10–20 les chasseurs)
+    agri_rate: float = 1e-6     # /an par cellule : probabilité d'invention locale, avant pondérations
+    agri_tau: float = 1500.0    # ans : développement d'une agriculture une fois inventée
+    agri_learn: float = 1 / 2000  # /an : apprentissage auprès de voisins agriculteurs
                                 # (embarcations = technique complexe) ; sans complexité : pas de limite
     adv_max: float = 0.302      # avantage compétitif pour un écart de complexité de 1 (calibré s23, tour 2)
     net_sigma: float = 3.0      # portée du réseau social (cellules, noyau gaussien σ ≈ 330 km)
@@ -111,6 +117,22 @@ class Ecology:
             from .hydrology import Hydrology
             self.hydro = Hydrology(grid, self.topo)
 
+    def plant_potential(self, sim, s, river) -> np.ndarray:
+        """Potentiel agricole (0..1) : des plantes domesticables poussent bien (température douce,
+        pluie suffisante ou fleuve), le climat est STABLE (peu de changement sur ~2 000 ans), et le
+        CO₂ n'est pas glaciaire. Au Pléistocène, CO₂ bas et climat instable rendent l'agriculture
+        improbable ; à l'Holocène, elle devient presque inévitable (Richerson, Boyd & Bettinger 2001)."""
+        T, P = s.temperature, s.precipitation
+        temp_f = np.exp(-((T - 17.0) / 7.0) ** 2)
+        rain_f = np.clip((P - 200) / 400, 0, 1) * np.clip((2500 - P) / 1500, 0, 1)
+        river_f = 0 if river is None else 0.8 * river
+        pot = temp_f * np.maximum(rain_f, river_f)
+        from .earth import climate_variability
+        stability = np.exp(-3.0 * climate_variability(s.year))  # Holocène ≈ 0,64 ; glaciaire ≈ 0,05
+        ice_volume = np.clip(-s.sea_level / 125.0, 0, 1)
+        co2 = 1 - 0.5 * ice_volume  # CO₂ glaciaire plus bas : plantes moins productives
+        return (pot * stability * co2 * (s.land_frac > 0.02) * ~s.ice).astype(np.float32)
+
     @staticmethod
     def archipelago_index(passable: np.ndarray, conn: dict) -> np.ndarray:
         """Part des directions où une terre voisine n'est atteignable que par la mer : liens
@@ -154,6 +176,8 @@ class Ecology:
         sim.state["passable"] = (s.land_frac > 0.02) & ~s.ice
         sim.state["conn"] = self.topo.connectivity(s.sea_level)  # liens à pied entre cellules voisines
         sim.state["archipelago"] = self.archipelago_index(sim.state["passable"], sim.state["conn"])
+        sim.state["land_area"] = (self.grid.cell_area_km2 * s.land_frac).astype(np.float32)
+        sim.state["plant_pot"] = self.plant_potential(sim, s, river)
         sim.state["rough_cost"] = np.exp(-s.roughness / self.p.rough_scale).astype(np.float32)
 
 
@@ -324,6 +348,32 @@ class Demography:
         r = range(-radius, radius + 1)
         return sum(self._view(padded, di, dj, N.shape) for di in r for dj in r)
 
+    def _agriculture(self, sim, name, p, N, C, dt, rng):
+        """Invention (rare, là où tout s'y prête), développement local, diffusion par apprentissage.
+        Pas de date ni de lieu imposés : les foyers agricoles émergent du climat et des sociétés."""
+        A = sim.state.get(f"agri:{name}")
+        if A is None:
+            A = np.zeros_like(N, dtype=np.float32)
+        pot = sim.state["plant_pot"]
+        K = np.maximum(sim.state["K"], 1e-9)
+        pressure = np.clip(N / K, 0, 1.5)
+        # 1. Invention : potentiel × répertoire culturel × pression démographique
+        prob = p.agri_rate * dt * pot * C * pressure * (N > 50) * (A < 0.05) * (C > 0.6)
+        born = rng.random(N.shape, dtype=np.float32) < prob
+        A = np.where(born, 0.15, A)
+        if born.any():
+            for i, j in zip(*np.nonzero(born)):
+                sim.log.emit(sim.year, "AGRICULTURE", f"{90 - i - 0.5:.0f}°, {j - 180 + 0.5:.0f}°", potentiel=f"{pot[i, j]:.2f}")
+        # 2. Développement local vers ce que l'environnement permet
+        grow = (A > 0) & (pot * C > A)
+        A = np.where(grow, A + (pot * C - A) * (1 - np.exp(-dt / p.agri_tau)), A)
+        # 3. Diffusion : on apprend des voisins agriculteurs si les plantes poussent chez soi
+        nb = np.where(self.network(N, p.net_sigma) > 1e-6,
+                      self.network(N * A, p.net_sigma) / np.maximum(self.network(N, p.net_sigma), 1e-6), 0)
+        learn = (nb > A) & (pot > 0.1)
+        A = np.where(learn, A + (np.minimum(nb, pot) - A).clip(0) * (1 - np.exp(-dt * p.agri_learn)), A)
+        sim.state[f"agri:{name}"] = np.where(N > 0, np.clip(A, 0, 1), 0).astype(np.float32)
+
     def carried_trait(self, sim, name: str, key: str, sigma: float):
         """Trait culturel tel que le porteraient des arrivants : max(valeur locale, moyenne du réseau
         voisin pondérée par la population). Une cellule vide a un trait 0, mais ceux qui
@@ -378,6 +428,11 @@ class Demography:
                 c = np.zeros_like(N, dtype=np.float32)
             c_eff = (self.carried_trait(sim, name, "culture", p.net_sigma) if sim.state.get(f"culture:{name}") is not None else c) if dynamic else p.c_fixed
             K = (K_base * cold_factor(T, p, c_eff)).astype(np.float32)
+            agri = sim.state.get(f"agri:{name}") if p.agriculture else None
+            if p.agriculture:
+                # Ce que la terre cultivée nourrit, selon le savoir agricole des habitants ou des arrivants
+                agri_eff = self.carried_trait(sim, name, "agri", p.net_sigma) if agri is not None else 0
+                K = (K + p.farm_density * sim.state["land_area"] * sim.state["plant_pot"] * agri_eff).astype(np.float32)
             Ksafe = np.maximum(K, 1e-9)
             load = N.copy()
             for other, M in current.items():
@@ -406,7 +461,7 @@ class Demography:
                 else:
                     boats = None if cx_now is None else self.boat_factor(cx_now, p)
                 cx = sim.state.get(f"complexity:{name}") if p.complexity and p.C_fixed is None else None
-                carried = ([N * c] if dynamic else []) + ([N * cx] if cx is not None else []) + ([N * sea] if sea is not None else [])
+                carried = ([N * c] if dynamic else []) + ([N * cx] if cx is not None else []) + ([N * sea] if sea is not None else []) + ([N * agri] if agri is not None else [])
                 if carried:
                     N, moved = self.migrate(N, room, out_rate, hop_coefs, carried=tuple(carried), hop_scale=boats)
                     safe = np.maximum(N, 1e-9)
@@ -416,6 +471,8 @@ class Demography:
                         sim.state[f"complexity:{name}"] = np.where(N > 1e-9, np.clip(moved.pop(0) / safe, 0, 1), 0).astype(np.float32)
                     if sea is not None:
                         sim.state[f"sea:{name}"] = np.where(N > 1e-9, np.clip(moved.pop(0) / safe, 0, 1), 0).astype(np.float32)
+                    if agri is not None:
+                        sim.state[f"agri:{name}"] = np.where(N > 1e-9, np.clip(moved.pop(0) / safe, 0, 1), 0).astype(np.float32)
                 else:
                     N = self.migrate(N, room, out_rate, hop_coefs, hop_scale=boats)
 
@@ -485,6 +542,8 @@ class Demography:
                     tau_s = np.where(target_s > S, p.sea_tau_gain, p.sea_tau_loss)
                     S = S + (target_s - S) * (1 - np.exp(-dt / tau_s))
                     sim.state[f"sea:{name}"] = np.where(N > 0, S, 0).astype(np.float32)
+                if p.agriculture:
+                    self._agriculture(sim, name, p, N, C, dt, rng)
             if dynamic:
                 n_eff = n_net
                 stressed = T < p.t_ok + 5

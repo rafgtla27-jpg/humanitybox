@@ -18,6 +18,7 @@ const NICE = [25, 50, 100, 200, 500, 1000, 2000, 5000, 10000];
 const KM_PER_DEG = 111.2;
 
 const SAPIENS = new THREE.Color("#ffb54a");
+const FARM = new THREE.Color("#e8d27a");
 const ARCHAIC = new THREE.Color("#c4dcae");
 
 /** Hachage déterministe → [0, 1) : même cellule, même rang = même position à chaque frame. */
@@ -51,6 +52,30 @@ function silhouetteTexture(): THREE.CanvasTexture {
   figure(2.6);
   g.fillStyle = "#ffffff"; // partie teintée par la couleur de la population
   figure(0);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
+function hutTexture(): THREE.CanvasTexture {
+  const c = document.createElement("canvas");
+  c.width = c.height = 64;
+  const g = c.getContext("2d")!;
+  const hut = (grow: number) => {
+    g.beginPath(); // toit de chaume
+    g.moveTo(32, 8 - grow);
+    g.lineTo(58 + grow, 34 + grow * 0.5);
+    g.lineTo(6 - grow, 34 + grow * 0.5);
+    g.closePath();
+    g.fill();
+    g.fillRect(14 - grow, 32, 36 + 2 * grow, 24 + grow); // murs
+  };
+  g.fillStyle = "#1a1408";
+  hut(2.6);
+  g.fillStyle = "#ffffff";
+  hut(0);
+  g.fillStyle = "#1a1408"; // porte
+  g.fillRect(28, 42, 9, 14);
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
   return t;
@@ -95,6 +120,12 @@ const fragmentShader = /* glsl */ `
 
 export class Bands {
   readonly points: THREE.Points;
+  readonly huts: THREE.Points;
+  private hutGeometry = new THREE.BufferGeometry();
+  private hutMaterial: THREE.ShaderMaterial;
+  private hutPositions = new Float32Array(MAX_SPRITES * 3);
+  private hutColors = new Float32Array(MAX_SPRITES * 3);
+  private hutSeeds = new Float32Array(MAX_SPRITES);
   private geometry = new THREE.BufferGeometry();
   private material: THREE.ShaderMaterial;
   private positions = new Float32Array(MAX_SPRITES * 3);
@@ -123,6 +154,17 @@ export class Bands {
     this.points = new THREE.Points(this.geometry, this.material);
     this.points.frustumCulled = false;
     this.points.renderOrder = 2;
+    // Villages (S2) : là où l'on cultive, une partie des silhouettes devient des huttes immobiles
+    this.hutGeometry.setAttribute("position", new THREE.BufferAttribute(this.hutPositions, 3).setUsage(THREE.DynamicDrawUsage));
+    this.hutGeometry.setAttribute("color", new THREE.BufferAttribute(this.hutColors, 3).setUsage(THREE.DynamicDrawUsage));
+    this.hutGeometry.setAttribute("seed", new THREE.BufferAttribute(this.hutSeeds, 1).setUsage(THREE.DynamicDrawUsage));
+    this.hutGeometry.setDrawRange(0, 0);
+    this.hutMaterial = this.material.clone();
+    this.hutMaterial.uniforms.uMap = { value: hutTexture() };
+    this.hutMaterial.uniforms.uTime = { value: 0 };
+    this.huts = new THREE.Points(this.hutGeometry, this.hutMaterial);
+    this.huts.frustumCulled = false;
+    this.huts.renderOrder = 2;
   }
 
   /** Recalcule les silhouettes pour une frame. Renvoie le nombre de personnes par silhouette. */
@@ -158,7 +200,11 @@ export class Bands {
     const S = NICE.find((v) => v >= target) ?? NICE[NICE.length - 1];
     this.peoplePerSprite = S;
 
+    const nExtra = data.manifest.extra?.layers.length ?? 0;
+    const agriIdx = data.manifest.extra?.layers.findIndex((l) => l.id === "agri") ?? -1;
+    const agri = agriIdx >= 0 && data.extra ? data.extra.subarray(frame * nExtra * plane + agriIdx * plane, frame * nExtra * plane + (agriIdx + 1) * plane) : null;
     let count = 0;
+    let hutCount = 0;
     outer: for (let i = 0; i < ny; i++) {
       const lat0 = 90 - res * (i + 0.5);
       for (let j = 0; j < nx; j++) {
@@ -171,14 +217,26 @@ export class Bands {
           const m = Math.min(MAX_PER_CELL, Math.floor(exact) + (hash(i, j, 999 + L) < exact % 1 ? 1 : 0));
           for (let s = 0; s < m; s++) {
             if (count >= MAX_SPRITES) break outer;
+            const farm = L === 0 && agri && agri[k] ? (agri[k] - 1) / 254 : 0;
             const lat = lat0 + (hash(i, j, s * 2 + L * 101) - 0.5) * res * 0.95;
             const lon = -180 + res * (j + 0.5) + (hash(j, i, s * 2 + 1 + L * 101) - 0.5) * res * 0.95;
             const la = (lat * Math.PI) / 180;
             const lo2 = (lon * Math.PI) / 180;
             // Même convention que la texture du globe : longitude 0 sur +X, 90°E vers −Z
-            this.positions[count * 3] = RADIUS * Math.cos(la) * Math.cos(lo2);
-            this.positions[count * 3 + 1] = RADIUS * Math.sin(la);
-            this.positions[count * 3 + 2] = -RADIUS * Math.cos(la) * Math.sin(lo2);
+            const x = RADIUS * Math.cos(la) * Math.cos(lo2);
+            const yv = RADIUS * Math.sin(la);
+            const z = -RADIUS * Math.cos(la) * Math.sin(lo2);
+            if (farm > 0.3 && hash(i, j, s + 555) < farm * 0.5) {
+              // Une hutte pour plusieurs silhouettes : on regroupe les agriculteurs en villages
+              this.hutPositions.set([x, yv, z], hutCount * 3);
+              this.hutColors.set([FARM.r, FARM.g, FARM.b], hutCount * 3);
+              this.hutSeeds[hutCount] = 0;
+              hutCount++;
+              continue;
+            }
+            this.positions[count * 3] = x;
+            this.positions[count * 3 + 1] = yv;
+            this.positions[count * 3 + 2] = z;
             const col = L === 0 ? SAPIENS : ARCHAIC;
             this.colors[count * 3] = col.r;
             this.colors[count * 3 + 1] = col.g;
@@ -191,6 +249,8 @@ export class Bands {
     }
     this.geometry.setDrawRange(0, count);
     for (const name of ["position", "color", "seed"]) (this.geometry.getAttribute(name) as THREE.BufferAttribute).needsUpdate = true;
+    this.hutGeometry.setDrawRange(0, hutCount);
+    for (const name of ["position", "color", "seed"]) (this.hutGeometry.getAttribute(name) as THREE.BufferAttribute).needsUpdate = true;
     return S;
   }
 
@@ -203,9 +263,15 @@ export class Bands {
     this.material.uniforms.uOpacity.value = visible ? Math.min(1, Math.max(0, (zoom - 0.12) * 2.2)) : 0;
     this.material.uniforms.uSize.value = 3.5 + 16 * zoom * zoom;
     this.points.visible = visible;
+    this.hutMaterial.uniforms.uOpacity.value = this.material.uniforms.uOpacity.value;
+    this.hutMaterial.uniforms.uSize.value = this.material.uniforms.uSize.value * 1.25;
+    this.huts.visible = visible;
   }
 
   dispose() {
+    this.hutGeometry.dispose();
+    (this.hutMaterial.uniforms.uMap.value as THREE.Texture).dispose();
+    this.hutMaterial.dispose();
     this.geometry.dispose();
     (this.material.uniforms.uMap.value as THREE.Texture).dispose();
     this.material.dispose();

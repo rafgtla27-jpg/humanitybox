@@ -1,5 +1,25 @@
 [
-  { "dir": "C", "title": "C — monde de validation 1001", "detail": "moteur 0.4.9 figé, climat Beyer 2020 ; distribution sur 50 mondes neufs", "ensemble": "ensemble_C.json" },
-  { "dir": "B", "title": "B — Eurasie habitée", "detail": "avantage fixe, climat Beyer 2020, moteur 0.3.1, 20 mondes", "ensemble": "ensemble_B.json" },
-  { "dir": "A", "title": "A — Monde vide", "detail": "climat Beyer 2020, moteur 0.3.1, 20 mondes", "ensemble": "ensemble_A.json" }
+ {
+  "dir": "E",
+  "title": "E — agriculture et villages",
+  "detail": "moteur 0.5.2 : dispersion, navigation, agriculture, de −120 000 à aujourd'hui"
+ },
+ {
+  "dir": "C",
+  "title": "C — monde de validation 1001",
+  "detail": "moteur 0.4.9 figé, climat Beyer 2020 ; distribution sur 50 mondes neufs",
+  "ensemble": "ensemble_C.json"
+ },
+ {
+  "dir": "B",
+  "title": "B — Eurasie habitée",
+  "detail": "avantage fixe, climat Beyer 2020, moteur 0.3.1, 20 mondes",
+  "ensemble": "ensemble_B.json"
+ },
+ {
+  "dir": "A",
+  "title": "A — Monde vide",
+  "detail": "climat Beyer 2020, moteur 0.3.1, 20 mondes",
+  "ensemble": "ensemble_A.json"
+ }
 ]

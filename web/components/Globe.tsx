@@ -124,7 +124,10 @@ export default function Globe({ data, frame, layer, space = false, className = "
     scene.add(atmosphere);
 
     const bands = sprites ? new Bands(renderer.getPixelRatio()) : null;
-    if (bands) scene.add(bands.points);
+    if (bands) {
+      scene.add(bands.points);
+      scene.add(bands.huts);
+    }
     const animate = !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const clock = new THREE.Clock();
 

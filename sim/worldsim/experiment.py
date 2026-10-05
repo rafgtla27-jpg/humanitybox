@@ -29,7 +29,7 @@ ARCHAIC = HumanParams(p_sea=0.0, c_fixed=0.4, C_fixed=0.35)  # mobiles mais conf
 
 def run(seed: int = 1, start: int = -120_000, end: int = -10_000, params: HumanParams | None = None,
         archaics: bool = False, alpha_sa: float = 1.0, alpha_as: float = 1.0,
-        complexity: bool = False, maritime: bool = False, archaic_C: float | None = None, neanderthal_C: float | None = None,
+        complexity: bool = False, maritime: bool = False, agriculture: bool = False, archaic_C: float | None = None, neanderthal_C: float | None = None,
         snapshot_every: int | None = None, earth=None, grid: Grid | None = None, progress=False, dt: int = 20) -> RunResult:
     grid = grid or Grid(1.0)
     earth = earth or ParametricPaleoEarth(grid)
@@ -46,7 +46,8 @@ def run(seed: int = 1, start: int = -120_000, end: int = -10_000, params: HumanP
     sim.state["N"] = np.where(africa, 0.5 * sim.state["K"], 0.0).astype(np.float32)
     if complexity:
         import dataclasses as _dc
-        params = _dc.replace(params, complexity=True, maritime=maritime or params.maritime)
+        params = _dc.replace(params, complexity=True, maritime=maritime or params.maritime,
+                             agriculture=agriculture or params.agriculture)
     sim.state["populations"] = {"N": params}
     if archaics:
         # Néandertaliens / Dénisoviens / autres : Eurasie hors Sahul, Japon, Amériques
@@ -76,6 +77,11 @@ def run(seed: int = 1, start: int = -120_000, end: int = -10_000, params: HumanP
 
     tracker = RegionTracker(grid)
     sim.observe(500, tracker)
+    agri_tracker = None
+    if agriculture:
+        from .validation import AgriTracker
+        agri_tracker = AgriTracker(grid)
+        sim.observe(200, agri_tracker)
     snaps: dict = {}
     clim: dict = {}
     extra: dict = {}
@@ -90,6 +96,8 @@ def run(seed: int = 1, start: int = -120_000, end: int = -10_000, params: HumanP
                 layers["rivers"] = s.state["discharge"].copy()
             if "culture:N" in s.state:
                 layers["cold"] = np.where(s.state["N"] > 0, s.state["culture:N"], np.nan).astype(np.float32)
+            if "agri:N" in s.state:
+                layers["agri"] = np.where(s.state["N"] > 0, s.state["agri:N"], np.nan).astype(np.float32)
             if "sea:N" in s.state:
                 layers["sea"] = np.where(s.state["N"] > 0, s.state["sea:N"], np.nan).astype(np.float32)
             if "complexity:N" in s.state:
@@ -98,4 +106,6 @@ def run(seed: int = 1, start: int = -120_000, end: int = -10_000, params: HumanP
         sim.observe(snapshot_every, snap)
 
     sim.run(progress=progress)
-    return RunResult(seed, tracker, sim.log.events, snaps, clim, extra)
+    res = RunResult(seed, tracker, sim.log.events, snaps, clim, extra)
+    res.agri = agri_tracker.report() if agri_tracker else None
+    return res

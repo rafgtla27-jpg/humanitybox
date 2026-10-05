@@ -27,7 +27,7 @@ import numpy as np
 
 from .earth import Grid, monsoon_index, sea_level
 
-ENGINE_VERSION = "0.5.1"
+ENGINE_VERSION = "0.5.2"
 LO, HI = 1e-3, 0.5  # hab/km²
 T_RANGE = (-40.0, 35.0)    # °C
 P_RANGE = (10.0, 4000.0)   # mm/an
@@ -38,6 +38,7 @@ EXTRA_SPECS = {
     "cold": {"label": "Adaptation au froid", "min": 0, "max": 1, "scale": "linear", "unit": ""},
     "complexity": {"label": "Complexité culturelle", "min": 0, "max": 1, "scale": "linear", "unit": ""},
     "sea": {"label": "Savoir maritime", "min": 0, "max": 1, "scale": "linear", "unit": ""},
+    "agri": {"label": "Agriculture", "min": 0, "max": 1, "scale": "linear", "unit": ""},
 }
 
 
@@ -45,7 +46,7 @@ def encode_extra(name: str, a: np.ndarray, land: np.ndarray) -> np.ndarray:
     if name == "rivers":
         t = (np.log10(np.maximum(a, 1e-9)) - np.log10(Q_RANGE[0])) / (np.log10(Q_RANGE[1]) - np.log10(Q_RANGE[0]))
         return _q(t, land & (a >= Q_RANGE[0]))
-    if name in ("cold", "complexity", "sea"):
+    if name in ("cold", "complexity", "sea", "agri"):
         return _q(a, land & np.isfinite(a))
     raise KeyError(name)
 
@@ -132,6 +133,7 @@ def export_run(result, grid: Grid, out_dir: Path, meta: dict) -> dict:
         "regions": [{**row, "target": list(row["target"]), "box": None} for row in t.report()],
         "events": [{"year": e.year, "kind": e.kind, "region": e.where, "data": {k: str(v) for k, v in e.data.items()}}
                    for e in result.log],
+        "agri_foci": getattr(result, "agri", None),
         "series": {"years": t.years, "total": [round(x) for x in t.total],
                    "by_region": {k: [round(x) for x in v] for k, v in t.series.items()}},
         "forcing": {"years": curve_years,

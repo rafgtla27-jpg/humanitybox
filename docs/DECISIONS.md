@@ -481,3 +481,30 @@ Décision proposée : arrêter la calibration de la dispersion (rendement décro
 (0.4.9, validé partiellement) et D (0.5.1, meilleur pour l'Australie) comme deux hypothèses
 documentées ; tester les explications de Gibraltar comme des EXPÉRIENCES nommées (contrefactuels),
 pas comme des réglages cachés.
+
+**Tournant « jeu vidéo » (décision de l'utilisateur)** — WORLD_SIM devient aussi un jeu. On ne
+pousse plus le réalisme jusqu'à la validation stricte : l'exigence devient la **logique** (chaque
+phénomène a une cause lisible dans le modèle) et la plausibilité des ordres de grandeur. La
+dispersion est figée telle quelle (scénarios C et D documentés, énigme de Gibraltar ouverte). Les
+calibrations lourdes et validations pré-enregistrées ne sont plus systématiques ; on garde le
+journal des décisions et les tests.
+
+**V0.5 — agriculture (scénario E, moteur 0.5.2)**
+- Potentiel agricole par cellule : plantes domesticables (température ~17 °C ± 7, pluie 200–2 500 mm
+  ou grand fleuve) × stabilité climatique × CO₂ (plus bas en glaciaire).
+- Stabilité : nouveau forçage `climate_variability` — forte variabilité millénaire pendant toute la
+  dernière glaciation (Dansgaard-Oeschger, invisible dans Beyer au pas de 1–2 000 ans), faible à
+  l'Éémien et à l'Holocène (depuis 11 700 ans). Logique de Richerson, Boyd & Bettinger (2001) :
+  agriculture impossible au Pléistocène, presque inévitable à l'Holocène.
+- Invention rare (potentiel × répertoire ≥ 0,6 × pression démographique), développement local,
+  diffusion par apprentissage et par migration ; l'agriculture multiplie la capacité d'accueil
+  (jusqu'à 2 hab/km²).
+- Premier essai (seed 1, réglages D s29, jusqu'à aujourd'hui) : aucun foyer au Pléistocène après
+  ajout du forçage (sans lui : agriculture dès 100k, absurde) ; Croissant fertile 10k, Chine 10,2k,
+  Inde 7,4k, Mésoamérique 2,2k (les Amériques ne sont peuplées que vers 7k), Nouvelle-Guinée, Andes,
+  Sahel jamais. Population à 0 BP : 24 M (trop faible pour aujourd'hui, plausible vers 5k : pas
+  encore d'intensification, de villes ni de métallurgie).
+- Défauts connus : l'agriculture se diffuse trop vite et trop uniformément (Afrique tropicale
+  comprise) ; Amériques peuplées trop tard (corridor glaciaire seulement, pas de route côtière).
+Viewer : calque « Agriculture » ; étape sprites S2 — là où l'on cultive, une partie des silhouettes
+devient des huttes de village ; le monde E est la simulation d'accueil.

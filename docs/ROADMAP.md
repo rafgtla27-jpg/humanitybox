@@ -50,7 +50,7 @@ du projet.
 | V0.2 | Terre paléo Beyer 2020 | cohortes + archaïques | dates d'arrivée vs archéologie | **globe 3D** (R1, livré en avance) + calques climat | ✅ résultats lus (voir DECISIONS) |
 | V0.3 | idem | ✅ eau douce + rivières émergentes, ✅ adaptation au froid culturelle, ✅ contingence explicite (bruit démographique, pionniers) ; à faire : calibration, refuges, goulots | ✅ P(arrivée) sur ensembles ; ✅ calibration v2 (hypercube latin + confirmation sur 20 mondes, entraînement/test séparés) ; ✅ validation finale pré-enregistrée ; calibration close (s23) ; **validation finale : NON VALIDÉE** (population 10,3 M, ordre d'arrivée τ = 0,50 ; sortie précoce OK) — figée en l'état | ✅ rivières, calque culture, distributions dans /labo | 🔧 en cours |
 | V0.4 | −120k → −5k | ✅ complexité culturelle liée au réseau social (Henrich, Powell 2009), ✅ avantage compétitif émergent (scénario C) ; à faire : graphe de savoirs, oubli d'innovations précises | sortie d'Afrique ~60k sans α fixé à la main (calibration C en cours) | ✅ calque « Complexité culturelle » ; à faire : timeline des savoirs | 🔧 commencée |
-| V0.5 | Holocène | plantes/animaux exploitables (traits), domestication | P(agriculture) par foyer (Croissant fertile, Chine, Mésoamérique, Andes, Nouvelle-Guinée, Sahel) | carte des foyers + probabilités | ⏳ |
+| V0.5 | −120k → aujourd'hui | ✅ navigation d'archipel (D), ✅ agriculture émergente (E : potentiel, stabilité climatique, invention, diffusion) ; à faire : animaux, foyers trop rares/trop diffus | logique et plausibilité (tournant jeu) | ✅ calque Agriculture, ✅ huttes de village (S2) | 🔧 en cours |
 | V0.6 | Holocène + sols (SoilGrids comme ancre) | stockage, sédentarisation, villages, maladies (zoonoses) | densités, croissance post-agricole | **carte stratégique** (R2) : villages, réseaux | ⏳ |
 | V0.7 | Terre réelle | réciprocité → échange → monnaie, conflits sous contrainte, transport à coûts | commerce sur axes peu coûteux, villes après surplus | routes, frontières culturelles | ⏳ |
 | V0.8 | Terre réelle | institutions comme technologies sociales, coordination capacity, écriture par besoin | diversité des trajectoires politiques | vue « pourquoi ? » (graphe causal) | ⏳ |
@@ -79,7 +79,7 @@ d'agents, une silhouette représente un effectif ; elle ne prend pas de décisio
   10 000 selon la population mondiale, au plus 30 000 silhouettes), position stable dans sa
   cellule, apparition quand on zoome, sol de végétation sous les humains. Mouvement sur place
   décoratif.
-- **S2 — Camps et villages** (V0.6) : silhouettes typées (chasseurs-cueilleurs, agriculteurs),
+- **S2 — Camps et villages** (commencé en 0.5.2 : huttes là où l'on cultive ; V0.6 pour le reste) : silhouettes typées (chasseurs-cueilleurs, agriculteurs),
   structures (campements, huttes, greniers) quand la sédentarisation existe dans le moteur.
 - **S3 — Agents réels dans la zone regardée** (V0.7–V0.8, résolution adaptative) : la cohorte se
   décompose en groupes puis en individus là où l'on zoome ; trajets réels, caravanes sur les
