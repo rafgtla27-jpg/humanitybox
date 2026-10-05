@@ -100,7 +100,7 @@ export function paintRelief(relief: Relief, data: RunData, frame: number, layer:
     : ["temperature", "precipitation", "npp"].includes(layer) && clim
       ? clim.subarray(["temperature", "precipitation", "npp"].indexOf(layer) * plane, (["temperature", "precipitation", "npp"].indexOf(layer) + 1) * plane)
       : extraPlane(layer);
-  const ramp = layer !== "humans" ? RAMPS[layer as Exclude<Layer, "humans">] : null;
+  const ramp = layer !== "humans" && layer !== "peoples" ? RAMPS[layer as Exclude<Layer, "humans" | "peoples">] : null;
 
   // 1. Grandeurs à 1° (couleur du sol, glace, champs, fleuves, présence humaine)
   const colR = new Float32Array(plane), colG = new Float32Array(plane), colB = new Float32Array(plane);

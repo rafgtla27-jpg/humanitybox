@@ -31,6 +31,9 @@ export default function Simulator() {
   const [runs, setRuns] = useState<RunRef[]>([]);
   const [active, setActive] = useState<string | null>("live");
   const [power, setPower] = useState<PowerId | null>(null);
+  const [selected, setSelected] = useState<number | null>(null);
+  const [favorite, setFavorite] = useState<number | null>(null);
+  const [flyTo, setFlyTo] = useState<{ lat: number; lon: number; key: number } | undefined>(undefined);
   const isLive = active === "live";
   const live = useLive(isLive);
   const [data, setData] = useState<RunData | null>(null);
@@ -93,7 +96,7 @@ export default function Simulator() {
     wake();
     return () => clearTimeout(idle.current);
   }, [wake]);
-  const visible = awake || menu !== null || !(isLive ? live.data : data) || power !== null;
+  const visible = awake || menu !== null || !(isLive ? live.data : data) || power !== null || selected !== null;
 
   const toggle = useCallback(() => {
     if (!n) return;
@@ -126,7 +129,16 @@ export default function Simulator() {
         <Globe
           data={shown!} frame={shownFrame} layer={layer} space sprites onSpriteScale={setPerSprite} className="sim-globe" onError={setError}
           sceneKey={isLive ? "live" : undefined}
-          onPick={isLive && power ? (lat, lon) => live.send({ type: "power", kind: power, lat, lon }) : undefined}
+          flyTo={flyTo}
+          onPick={isLive ? (lat, lon) => {
+            if (power) { live.send({ type: "power", kind: power, lat, lon }); return; }
+            // sans pouvoir choisi : un clic désigne le peuple qui vit là
+            const d = live.data;
+            if (!d?.extra) return;
+            const k = Math.min(179, Math.floor(90 - lat)) * 360 + ((Math.floor(lon + 180) % 360) + 360) % 360;
+            const idx = d.extra[5 * 64800 + k];
+            setSelected(idx ? d.manifest.peoples?.[idx - 1]?.id ?? null : null);
+          } : undefined}
         />
       )}
       {!shown && !error && <div className="sim-loading" aria-label="Chargement" />}
@@ -148,7 +160,7 @@ export default function Simulator() {
 
           {menu === "layers" && (
             <div className="popover" role="menu">
-              {(data ? availableLayers(data) : []).map((l) => (
+              {(shown ? availableLayers(shown) : []).map((l) => (
                 <button key={l.id} role="menuitemradio" aria-checked={layer === l.id} onClick={() => { setLayer(l.id); setMenu(null); }}>
                   {l.label}
                 </button>
@@ -179,7 +191,8 @@ export default function Simulator() {
                   <span aria-hidden>{p.icon}</span>
                 </button>
               ))}
-              {power && <p className="power-hint">{POWERS.find((p) => p.id === power)?.label} : clique sur le globe</p>}
+              {power ? <p className="power-hint">{POWERS.find((p) => p.id === power)?.label} : clique sur le globe</p>
+                : <p className="power-hint muted">Clique sur un peuple pour le découvrir</p>}
             </div>
             <div className="hud-bottom hud-live">
               <button className="play-btn" aria-label={live.status.playing ? "Pause" : "Lecture"}
@@ -198,10 +211,48 @@ export default function Simulator() {
               </div>
               <div className="hud-pop">{(live.status.sapiens / 1e6).toFixed(2).replace(".", ",")} M humains</div>
             </div>
+            {(() => {
+              const fav = live.peoples.find((p) => p.id === favorite);
+              const favGone = favorite !== null && !fav;
+              return favorite !== null && (
+                <button className="fav-chip" onClick={() => { if (fav) { setSelected(fav.id); setFlyTo({ lat: fav.lat, lon: fav.lon, key: Date.now() }); } }}>
+                  <span aria-hidden>♥</span> {fav ? `${fav.name} — ${Math.round(fav.pop).toLocaleString("fr-FR")}` : favGone ? "ton peuple a disparu" : ""}
+                </button>
+              );
+            })()}
+            {selected !== null && (() => {
+              const p = live.peoples.find((q) => q.id === selected);
+              if (!p) return null;
+              const parent = live.events.find((e) => e.people === p.id && e.text.includes("se séparent"));
+              const story = live.events.filter((e) => e.people === p.id).slice(-6).reverse();
+              return (
+                <aside className="people-panel" aria-label={`Peuple ${p.name}`}>
+                  <button className="close" aria-label="Fermer" onClick={() => setSelected(null)}>×</button>
+                  <h2><i style={{ background: `rgb(${p.color.join(",")})` }} />{p.name}</h2>
+                  <p className="sub">{parent ? parent.text.replace(`Les ${p.name} se séparent des `, "Issus des ") : "Peuple fondateur"}, depuis {Math.abs(Math.round(p.born)).toLocaleString("fr-FR")} ans</p>
+                  <dl>
+                    <div><dt>Population</dt><dd>{Math.round(p.pop).toLocaleString("fr-FR")}</dd></div>
+                    <div><dt>Territoire</dt><dd>{(p.cells * 9000).toLocaleString("fr-FR")} km²</dd></div>
+                    <div><dt>Savoir-faire</dt><dd>{Math.round(p.C * 100)} %</dd></div>
+                    <div><dt>Agriculture</dt><dd>{Math.round(p.agri * 100)} %</dd></div>
+                    <div><dt>Navigation</dt><dd>{Math.round(p.sea * 100)} %</dd></div>
+                  </dl>
+                  <div className="actions">
+                    <button className={favorite === p.id ? "on" : ""} onClick={() => setFavorite(favorite === p.id ? null : p.id)}>
+                      ♥ {favorite === p.id ? "Mon peuple de cœur" : "Choisir comme peuple de cœur"}
+                    </button>
+                    <button onClick={() => setFlyTo({ lat: p.lat, lon: p.lon, key: Date.now() })}>Aller voir</button>
+                  </div>
+                  {story.length > 0 && <ol className="story">{story.map((e, i) => <li key={i}><b>{Math.abs(Math.round(e.year)).toLocaleString("fr-FR")}</b> {e.text}</li>)}</ol>}
+                </aside>
+              );
+            })()}
             {live.events.length > 0 && (
               <ol className="chronicle" aria-label="Chronique">
                 {live.events.slice(-5).map((e, i) => (
-                  <li key={`${e.year}-${i}`}><b>{Math.abs(Math.round(e.year)).toLocaleString("fr-FR")}</b> {e.text}</li>
+                  <li key={`${e.year}-${i}`} className={e.people !== undefined && e.people === favorite ? "fav" : ""}>
+                    <b>{Math.abs(Math.round(e.year)).toLocaleString("fr-FR")}</b> {e.people !== undefined && e.people === favorite ? "♥ " : ""}{e.text}
+                  </li>
                 ))}
               </ol>
             )}
@@ -243,6 +294,7 @@ function IconButton({ label, active, onClick, children }: { label: string; activ
 }
 
 function LayerRamp({ data, layer }: { data: RunData; layer: Exclude<Layer, "humans"> }) {
+  if (layer === "peoples") return null;
   const { min, max, unit } = legendFor(data.manifest, layer);
   const stops = RAMPS[layer].map(([p, c]) => `${c} ${p * 100}%`).join(", ");
   return (

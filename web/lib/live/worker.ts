@@ -35,7 +35,7 @@ function snapshot() {
   const ys = env.years;
   let s = 0;
   while (s < ys.length - 1 && e.year > (ys[s] + (ys[s + 1] ?? ys[s])) / 2) s++;
-  const frames = new Uint8Array(3 * NC), climate = new Uint8Array(3 * NC), extra = new Uint8Array(5 * NC);
+  const frames = new Uint8Array(3 * NC), climate = new Uint8Array(3 * NC), extra = new Uint8Array(6 * NC);
   for (let k = 0; k < NC; k++) {
     const i = Math.floor(k / 360);
     const area = 111.2 * 111.2 * Math.cos(((90 - (i + 0.5)) * Math.PI) / 180) * Math.max(e.lf[k], 1e-3);
@@ -51,12 +51,13 @@ function snapshot() {
     extra[2 * NC + k] = has ? 1 + Math.round(254 * e.C[k]) : 0;
     extra[3 * NC + k] = has ? 1 + Math.round(254 * e.S[k]) : 0;
     extra[4 * NC + k] = has ? 1 + Math.round(254 * e.Ag[k]) : 0;
+    extra[5 * NC + k] = e.peopleIdx[k];
   }
   const events = e.events.slice(sentEvents);
   sentEvents = e.events.length;
   const t = e.totals();
   (self as unknown as Worker).postMessage(
-    { type: "snapshot", year: e.year, sea: e.seaLevel(), frames, climate, extra, totals: t, events, playing, yearsPerSecond },
+    { type: "snapshot", year: e.year, sea: e.seaLevel(), frames, climate, extra, totals: t, events, playing, yearsPerSecond, peoples: e.peoples },
     [frames.buffer, climate.buffer, extra.buffer],
   );
 }
@@ -79,6 +80,7 @@ self.onmessage = async (ev: MessageEvent) => {
     const [data, rough] = await Promise.all([gunzip("/live/env.bin.gz"), gunzip("/live/rough.bin.gz")]);
     env = { years: meta.years, sea: meta.sea_level, data, rough, kLog: meta.K_log };
     engine = new LiveEngine(env, m.seed ?? Math.floor(Math.random() * 1e9));
+    engine.identifyPeoples();
     (self as unknown as Worker).postMessage({ type: "ready" });
     loop();
   } else if (m.type === "play") playing = true;

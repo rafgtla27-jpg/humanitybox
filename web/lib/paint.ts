@@ -1,6 +1,6 @@
 import type { Manifest } from "./data";
 
-export type Layer = "humans" | "temperature" | "precipitation" | "npp" | "cold" | "complexity" | "sea" | "agri";
+export type Layer = "humans" | "temperature" | "precipitation" | "npp" | "cold" | "complexity" | "sea" | "agri" | "peoples";
 const EXTRA_LAYERS: Layer[] = ["cold", "complexity", "sea", "agri"];
 
 export const LAYERS: { id: Layer; label: string }[] = [
@@ -12,12 +12,14 @@ export const LAYERS: { id: Layer; label: string }[] = [
   { id: "complexity", label: "Complexité culturelle" },
   { id: "sea", label: "Savoir maritime" },
   { id: "agri", label: "Agriculture" },
+  { id: "peoples", label: "Peuples" },
 ];
 
 /** Calques réellement disponibles pour un run (les anciens runs n'ont pas tout). */
 export function availableLayers(data: RunData) {
   return LAYERS.filter((l) => {
     if (l.id === "humans") return true;
+    if (l.id === "peoples") return extraIndex(data, "people") >= 0;
     if (EXTRA_LAYERS.includes(l.id)) return extraIndex(data, l.id) >= 0;
     return data.climate !== null;
   });
@@ -38,7 +40,7 @@ export const COLORS: Record<string, RGB> = {
 };
 
 // Rampes de couleur : positions 0..1 → couleur
-export const RAMPS: Record<Exclude<Layer, "humans">, [number, string][]> = {
+export const RAMPS: Record<Exclude<Layer, "humans" | "peoples">, [number, string][]> = {
   temperature: [[0, "#2f4f86"], [0.35, "#6f9cc4"], [0.55, "#cfd8d2"], [0.72, "#e8c27a"], [0.86, "#e3a13b"], [1, "#b4442c"]],
   precipitation: [[0, "#d9c79b"], [0.35, "#c9c27d"], [0.6, "#7fae6e"], [0.82, "#3f8a83"], [1, "#2a5f93"]],
   npp: [[0, "#6e6250"], [0.3, "#9a9a5c"], [0.65, "#79a453"], [1, "#2f6e35"]],
@@ -68,7 +70,7 @@ function buildLut(stops: [number, string][]): Uint8ClampedArray {
   }
   return lut;
 }
-const LUTS = Object.fromEntries(Object.entries(RAMPS).map(([k, v]) => [k, buildLut(v)])) as Record<Exclude<Layer, "humans">, Uint8ClampedArray>;
+const LUTS = Object.fromEntries(Object.entries(RAMPS).map(([k, v]) => [k, buildLut(v)])) as Record<Exclude<Layer, "humans" | "peoples">, Uint8ClampedArray>;
 
 export type RunData = { manifest: Manifest; frames: Uint8Array; climate: Uint8Array | null; extra: Uint8Array | null };
 
@@ -106,7 +108,7 @@ export function paintFrame(
   const natural = opts.naturalGround && layer === "humans" && data.climate
     ? data.climate.subarray(off + 2 * plane, off + 3 * plane) : null;
   const nppLut = LUTS.npp;
-  const lut = layer !== "humans" ? LUTS[layer] : null;
+  const lut = layer !== "humans" && layer !== "peoples" ? LUTS[layer] : null;
 
   const { density_lo: lo, density_hi: hi } = data.manifest.frames;
   const llo = Math.log10(lo);
@@ -173,6 +175,7 @@ export function legendFor(m: Manifest, layer: Exclude<Layer, "humans">): { min: 
   if (layer === "complexity") return { min: "répertoire érodé", max: "répertoire riche", unit: "" };
   if (layer === "sea") return { min: "terriens", max: "navigateurs", unit: "" };
   if (layer === "agri") return { min: "chasseurs-cueilleurs", max: "agriculteurs", unit: "" };
+  if (layer === "peoples") return { min: "", max: "", unit: "" };
   const spec = m.climate?.[layer];
   if (!spec) return { min: "", max: "", unit: "" };
   return { min: String(spec.min), max: String(spec.max), unit: spec.unit };

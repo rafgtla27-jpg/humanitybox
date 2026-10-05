@@ -12,9 +12,13 @@ const EXTRA = [
   { id: "complexity", label: "Complexité culturelle", min: 0, max: 1, scale: "linear", unit: "" },
   { id: "sea", label: "Savoir maritime", min: 0, max: 1, scale: "linear", unit: "" },
   { id: "agri", label: "Agriculture", min: 0, max: 1, scale: "linear", unit: "" },
+  { id: "people", label: "Peuples", min: 0, max: 255, scale: "index", unit: "" },
 ];
 
-function manifest(year: number, sea: number): Manifest {
+import type { People } from "./engine";
+export type { People };
+
+function manifest(year: number, sea: number, peoples: People[]): Manifest {
   return {
     experiment_id: "live", scenario: "live", label: "Monde vivant", seed: 0, climate_provider: "beyer2020-v1.2.2",
     engine_version: "live-0.7.0", git_sha: null, start_year: -120000, end_year: 0,
@@ -29,6 +33,7 @@ function manifest(year: number, sea: number): Manifest {
     extra: { file: "", layers: EXTRA },
     regions: [], events: [], series: { years: [], total: [], by_region: {} },
     forcing: { years: [year], sea_level: [sea], monsoon: [0] },
+    peoples,
   } as Manifest;
 }
 
@@ -36,7 +41,8 @@ export function useLive(enabled: boolean) {
   const worker = useRef<Worker | null>(null);
   const [data, setData] = useState<RunData | null>(null);
   const [status, setStatus] = useState<LiveStatus | null>(null);
-  const [events, setEvents] = useState<{ year: number; text: string }[]>([]);
+  const [events, setEvents] = useState<{ year: number; text: string; people?: number }[]>([]);
+  const [peoples, setPeoples] = useState<People[]>([]);
   useEffect(() => {
     if (!enabled) return;
     const w = new Worker(new URL("./worker.ts", import.meta.url));
@@ -44,13 +50,14 @@ export function useLive(enabled: boolean) {
     w.onmessage = (ev) => {
       const m = ev.data;
       if (m.type !== "snapshot") return;
-      setData({ manifest: manifest(m.year, m.sea), frames: m.frames, climate: m.climate, extra: m.extra });
+      setData({ manifest: manifest(m.year, m.sea, m.peoples), frames: m.frames, climate: m.climate, extra: m.extra });
+      setPeoples(m.peoples);
       setStatus({ year: m.year, sapiens: m.totals.sapiens, archaic: m.totals.archaic, playing: m.playing, yearsPerSecond: m.yearsPerSecond });
-      if (m.events.length) setEvents((e) => [...e, ...m.events].slice(-12));
+      if (m.events.length) setEvents((e) => [...e, ...m.events].slice(-300));
     };
     w.postMessage({ type: "init" });
     return () => { w.terminate(); worker.current = null; };
   }, [enabled]);
   const send = useCallback((msg: object) => worker.current?.postMessage(msg), []);
-  return { data, status, events, send };
+  return { data, status, events, peoples, send };
 }

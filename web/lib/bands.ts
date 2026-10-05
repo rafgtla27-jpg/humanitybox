@@ -192,6 +192,9 @@ export class Bands {
     const nExtra = data.manifest.extra?.layers.length ?? 0;
     const ai = data.manifest.extra?.layers.findIndex((l) => l.id === "agri") ?? -1;
     const agri = ai >= 0 && data.extra ? data.extra.subarray(frame * nExtra * plane + ai * plane, frame * nExtra * plane + (ai + 1) * plane) : null;
+    const pi = data.manifest.extra?.layers.findIndex((l) => l.id === "people") ?? -1;
+    const peopleIdx = pi >= 0 && data.extra ? data.extra.subarray(frame * nExtra * plane + pi * plane, frame * nExtra * plane + (pi + 1) * plane) : null;
+    const peopleCol = (data.manifest.peoples ?? []).map((p) => new THREE.Color(`rgb(${p.color[0]},${p.color[1]},${p.color[2]})`));
     const deq = (q: number) => (q ? 10 ** (llo + ((q - 1) / 254) * span) : 0);
 
     // Cellules regardées et population visible → combien de personnes par figure
@@ -223,7 +226,9 @@ export class Bands {
       const a = agri && agri[k] ? (agri[k] - 1) / 254 : 0;
       const T = temp && temp[k] ? -40 + (75 * (temp[k] - 1)) / 254 : 15;
       const farmers = a > 0.3 ? Ns * a : 0;
-      const dye = DYES[Math.floor(hash(Math.floor(lat0 / 15), Math.floor(lon0 / 15), 3) * DYES.length)];
+      // Vêtements aux couleurs du peuple de la cellule (sinon, teinture régionale par défaut)
+      const pid = peopleIdx ? peopleIdx[k] : 0;
+      const dye = pid && peopleCol[pid - 1] ? peopleCol[pid - 1] : DYES[Math.floor(hash(Math.floor(lat0 / 15), Math.floor(lon0 / 15), 3) * DYES.length)];
       const kmToDeg = (east: number, north: number, la0: number, lo0: number): [number, number] =>
         [la0 + north / 111.2, lo0 + east / (111.2 * Math.max(0.15, Math.cos((la0 * Math.PI) / 180)))];
 

@@ -569,3 +569,23 @@ logiciel) ; nettement plus sur un ordinateur ordinaire. Optimisations possibles 
 moins fréquent, WebAssembly.
 Correction : l'agriculture apparaissait à la fin de l'Éémien (−119 840, Afrique de l'Est) car ce
 dernier était traité comme stable ; il ne l'est plus (fin d'interglaciaire déjà instable).
+
+**0.8.0 — G3 : peuples émergents et peuple de cœur (monde vivant)**
+- Chaque cohorte porte trois marqueurs culturels neutres (langue, style) : ils voyagent avec les
+  migrants, dérivent lentement dans les petites populations, et font un saut à chaque fondation
+  d'un nouveau territoire (effet fondateur). Mer et déserts freinant les échanges, les écarts s'y
+  creusent. Au départ, l'Afrique a déjà une structure régionale (champ lisse).
+- Tous les 500 ans, les cellules voisines (reliées à pied) aux marqueurs proches sont regroupées en
+  peuples (au moins 3 000 personnes, 250 peuples au plus). L'identité est suivie dans le temps : un
+  territoire garde le peuple qui l'occupait le plus ; une scission donne un peuple « issu de » ; un
+  peuple qui n'est plus retrouvé « disparaît ou se fond dans ses voisins ». Nom généré par syllabes,
+  couleur tirée des marqueurs, gardés à vie.
+- Chronique : naissance, scission, déclin (< 60 % du pic), passage à l'agriculture, disparition.
+- Interface : calque « Peuples » (couleurs et frontières, sur GPU) ; vêtements des personnages aux
+  couleurs de leur peuple ; clic sur le globe → fiche du peuple (origine, population, territoire,
+  savoir-faire, agriculture, navigation, son histoire) ; « Choisir comme peuple de cœur » → pastille
+  en haut à gauche, événements marqués ♥, bouton « Aller voir » (vol jusqu'au territoire).
+Premier essai : à −113 000, l'Afrique formait encore un seul grand peuple ; seuil de regroupement
+resserré (0,07 → 0,045) et structure africaine initiale plus marquée pour faire apparaître
+plusieurs peuples africains dès le départ (réglage de jeu, non vérifié en test après coup).
+Défaut vu : Madagascar peuplée dès ~113k (traversée trop facile) — à revoir avec la navigation.

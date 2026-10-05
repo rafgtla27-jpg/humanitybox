@@ -218,6 +218,7 @@ function Controls({ data, view, setView, layer, setLayer }: {
 }
 
 function Legend({ data, layer }: { data: Loaded; layer: Layer }) {
+  if (layer === "peoples") return null;
   if (layer === "humans") {
     return (
       <p className="layer-legend">

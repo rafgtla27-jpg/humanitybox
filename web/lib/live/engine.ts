@@ -55,6 +55,31 @@ function makeBlur(sigma: number) {
   };
 }
 
+export type People = {
+  id: number; name: string; color: [number, number, number]; pop: number; cells: number;
+  lat: number; lon: number; agri: number; sea: number; C: number; parent: number | null; born: number; alive: boolean;
+  peak: number;
+};
+
+const SYL_A = ["ka", "ta", "ma", "na", "ra", "sa", "lo", "ki", "mu", "te", "zu", "ya", "be", "do", "ha", "ni", "so", "ru", "ve", "an", "el", "or", "ish", "ul"];
+const SYL_B = ["", "n", "r", "k", "sh", "m", "l", "t"];
+export function peopleName(id: number) {
+  const r = rng(id * 7919 + 13);
+  const n = 2 + Math.floor(r() * 2);
+  let w = "";
+  for (let i = 0; i < n; i++) {
+    const syl = SYL_A[Math.floor(r() * SYL_A.length)];
+    // pas de grappe imprononçable : une finale seulement après une voyelle
+    w += syl + (i === n - 1 && /[aeiou]$/.test(syl) ? SYL_B[Math.floor(r() * SYL_B.length)] : "");
+  }
+  return w.charAt(0).toUpperCase() + w.slice(1);
+}
+
+function hslToRgb(h: number, s: number, l: number): [number, number, number] {
+  const f = (n: number) => { const k = (n + h * 12) % 12; const a = s * Math.min(l, 1 - l); return Math.round(255 * (l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1)))); };
+  return [f(0), f(8), f(4)];
+}
+
 type Effect = { kind: Power; lat: number; lon: number; radiusDeg: number; until: number; factor: number };
 
 export class LiveEngine {
@@ -66,6 +91,11 @@ export class LiveEngine {
   CA = new Float32Array(NC);  // complexité des archaïques
   S = new Float32Array(NC);   // savoir maritime
   Ag = new Float32Array(NC);  // agriculture
+  // G3 : marqueurs culturels neutres (langue, style) → peuples émergents
+  M0 = new Float32Array(NC); M1 = new Float32Array(NC); M2 = new Float32Array(NC);
+  peopleIdx = new Uint8Array(NC);
+  peoples: People[] = [];
+  private nextPeopleId = 1;
   // environnement interpolé
   K = new Float32Array(NC); T = new Float32Array(NC); pot = new Float32Array(NC); lf = new Float32Array(NC);
   flags = new Uint8Array(NC); conn = new Uint8Array(NC); arch = new Float32Array(NC);
@@ -78,7 +108,7 @@ export class LiveEngine {
   private steps = 0;
   private effects: Effect[] = [];
   private envSlice = -1;
-  events: { year: number; text: string }[] = [];
+  events: { year: number; text: string; people?: number }[] = [];
 
   constructor(private env: Env, seed = 1) {
     this.rand = rng(seed);
@@ -94,6 +124,14 @@ export class LiveEngine {
       const i = Math.floor(k / NX), j = k % NX, lat = 90 - (i + 0.5), lon = -180 + (j + 0.5);
       if (lat >= -35 && lat <= 12 && lon >= -18 && lon <= 52) this.N[k] = 0.5 * this.K[k];
       if (this.rangeA[k]) this.A[k] = 0.6 * this.K[k];
+    }
+    // Structure ancienne de l'Afrique : des marqueurs qui varient doucement d'une région à l'autre
+    const phase = this.rand() * 6.28;
+    for (let k = 0; k < NC; k++) {
+      const i = Math.floor(k / NX), j = k % NX, lat = 90 - (i + 0.5), lon = -180 + (j + 0.5);
+      this.M0[k] = 0.5 + 0.38 * Math.sin(lat / 6 + phase);
+      this.M1[k] = 0.5 + 0.38 * Math.cos(lon / 7 + phase * 0.7);
+      this.M2[k] = 0.5 + 0.3 * Math.sin((lat + lon) / 9);
     }
     this.networks();
     for (let k = 0; k < NC; k++) {
@@ -246,7 +284,18 @@ export class LiveEngine {
       A[k] = Ka[k] > 0 ? A[k] * Math.exp(Math.max(-3, Math.min(1, P.r * dt * (1 - loadA[k] / Ka[k])))) : A[k] * 0.5;
     }
     // 2. migration (sapiens : à pied, détroits et sauts d'une cellule d'eau si savoir maritime)
-    this.migrate(N, Ks, loadS, true, [this.c, this.C, this.S, this.Ag], SE, dt);
+    const wasEmpty = new Uint8Array(NC);
+    for (let k = 0; k < NC; k++) wasEmpty[k] = N[k] < 1 ? 1 : 0;
+    this.migrate(N, Ks, loadS, true, [this.c, this.C, this.S, this.Ag, this.M0, this.M1, this.M2], SE, dt);
+    // Dérive culturelle : effet fondateur (un petit groupe qui s'installe s'écarte de ses ancêtres)
+    // et dérive lente des petites populations. Les barrières (mer, désert) laissent les écarts grandir.
+    for (let k = 0; k < NC; k++) {
+      if (N[k] < 1) continue;
+      const amp = (wasEmpty[k] ? 0.035 : 0.004 * Math.sqrt(dt / 20)) / (1 + Math.log10(1 + N[k] / 500));
+      this.M0[k] = Math.min(1, Math.max(0, this.M0[k] + amp * (this.rand() * 2 - 1)));
+      this.M1[k] = Math.min(1, Math.max(0, this.M1[k] + amp * (this.rand() * 2 - 1)));
+      this.M2[k] = Math.min(1, Math.max(0, this.M2[k] + amp * (this.rand() * 2 - 1)));
+    }
     this.migrate(A, Ka, loadA, false, [this.CA], null, dt);
     // 3. hasard démographique et extinction des réseaux trop petits
     const pDie = 1 - (1 - P.pExt) ** dt;
@@ -290,6 +339,85 @@ export class LiveEngine {
       }
     }
     this.year += dt;
+    if (this.steps % 25 === 1) this.identifyPeoples();
+  }
+
+  /** Regroupe les cellules voisines aux marqueurs proches en peuples, et suit leur identité dans le temps
+   *  (scission → nouveau peuple « issu de », disparition → chronique). */
+  identifyPeoples() {
+    const parent = new Int32Array(NC).map((_, i) => i);
+    const find = (x: number): number => { while (parent[x] !== x) { parent[x] = parent[parent[x]]; x = parent[x]; } return x; };
+    const ok = (k: number) => this.N[k] >= 30;
+    for (let i = 0; i < NY; i++) for (let j = 0; j < NX; j++) {
+      const k = i * NX + j;
+      if (!ok(k)) continue;
+      for (const [di, dj, b] of [[0, 1, 4], [1, 0, 6], [1, 1, 7], [1, -1, 5]] as const) {
+        const ii = i + di; if (ii >= NY) continue;
+        const kk = ii * NX + ((j + dj + NX) % NX);
+        if (!ok(kk) || !((this.conn[k] >> b) & 1)) continue;
+        const d = Math.abs(this.M0[k] - this.M0[kk]) + Math.abs(this.M1[k] - this.M1[kk]) + Math.abs(this.M2[k] - this.M2[kk]);
+        if (d < 0.045) { const a = find(k), c = find(kk); if (a !== c) parent[a] = c; }
+      }
+    }
+    const comp = new Map<number, { cells: number[]; pop: number }>();
+    for (let k = 0; k < NC; k++) {
+      if (!ok(k)) continue;
+      const r = find(k);
+      let e = comp.get(r); if (!e) { e = { cells: [], pop: 0 }; comp.set(r, e); }
+      e.cells.push(k); e.pop += this.N[k];
+    }
+    const comps = [...comp.values()].filter((c) => c.pop >= 3000).sort((a, b) => b.pop - a.pop).slice(0, 250);
+    const prev = this.peopleIdx;
+    const byId = new Map(this.peoples.map((p) => [p.id, p]));
+    const slotOf = new Map(this.peoples.map((p, i) => [p.id, i + 1]));
+    const taken = new Set<number>();
+    const next: People[] = [];
+    const idx = new Uint8Array(NC);
+    for (const c of comps) {
+      // identité : le peuple précédent qui occupait la plus grande partie de ce territoire
+      const overlap = new Map<number, number>();
+      for (const k of c.cells) if (prev[k]) {
+        const old = this.peoples[prev[k] - 1];
+        if (old) overlap.set(old.id, (overlap.get(old.id) ?? 0) + this.N[k]);
+      }
+      let bestId = -1, best = 0;
+      for (const [id, v] of overlap) if (v > best && !taken.has(id)) { best = v; bestId = id; }
+      let p: People;
+      let lat = 0, lon = 0, x = 0, y = 0, agri = 0, sea = 0, C = 0, m0 = 0, m1 = 0, m2 = 0;
+      for (const k of c.cells) {
+        const w = this.N[k], i = Math.floor(k / NX), j = k % NX;
+        lat += (90 - (i + 0.5)) * w;
+        x += Math.cos(((-180 + j + 0.5) * Math.PI) / 180) * w; y += Math.sin(((-180 + j + 0.5) * Math.PI) / 180) * w;
+        agri += this.Ag[k] * w; sea += this.S[k] * w; C += this.C[k] * w;
+        m0 += this.M0[k] * w; m1 += this.M1[k] * w; m2 += this.M2[k] * w;
+      }
+      lat /= c.pop; lon = (Math.atan2(y, x) * 180) / Math.PI;
+      if (bestId >= 0) {
+        p = { ...byId.get(bestId)! };
+        taken.add(bestId);
+      } else {
+        const id = this.nextPeopleId++;
+        const parentId = overlap.size ? [...overlap.entries()].sort((a, b) => b[1] - a[1])[0][0] : null;
+        const hue = (Math.atan2(m1 / c.pop - 0.5, m0 / c.pop - 0.5) / (2 * Math.PI) + 1 + id * 0.137) % 1;
+        p = { id, name: peopleName(id), color: hslToRgb(hue, 0.6, 0.48 + 0.12 * (m2 / c.pop - 0.5)), pop: 0, cells: 0, lat, lon, agri: 0, sea: 0, C: 0,
+          parent: parentId, born: this.year, alive: true, peak: 0 };
+        const par = parentId !== null ? byId.get(parentId) : null;
+        this.events.push({ year: this.year, text: par ? `Les ${p.name} se séparent des ${par.name}` : `Naissance du peuple ${p.name}`, people: id });
+      }
+      const oldPop = p.pop;
+      p.pop = c.pop; p.cells = c.cells.length; p.lat = lat; p.lon = lon; p.agri = agri / c.pop; p.sea = sea / c.pop; p.C = C / c.pop;
+      if (oldPop > 0 && p.pop < 0.6 * p.peak) this.events.push({ year: this.year, text: `Les ${p.name} déclinent (${Math.round(p.pop).toLocaleString("fr-FR")} personnes)`, people: p.id });
+      if (p.agri > 0.3 && (byId.get(p.id)?.agri ?? 0) <= 0.3 && oldPop > 0) this.events.push({ year: this.year, text: `Les ${p.name} deviennent agriculteurs`, people: p.id });
+      p.peak = Math.max(p.peak, p.pop);
+      next.push(p);
+      for (const k of c.cells) idx[k] = next.length;
+    }
+    for (const old of this.peoples) if (!taken.has(old.id) && !next.some((p) => p.id === old.id)) {
+      this.events.push({ year: this.year, text: `Les ${old.name} disparaissent ou se fondent dans leurs voisins`, people: old.id });
+    }
+    void slotOf;
+    this.peoples = next;
+    this.peopleIdx = idx;
   }
 
   private migrate(X: Float32Array, K: Float32Array, load: Float32Array, sapiens: boolean, traits: Float32Array[], sea: Float32Array | null, dt: number) {

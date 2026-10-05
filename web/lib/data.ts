@@ -32,6 +32,7 @@ export type Manifest = {
   events: { year: number; kind: string; region: string; data: Record<string, string> }[];
   series: { years: number[]; total: number[]; by_region: Record<string, number[]> };
   forcing: { years: number[]; sea_level: number[]; monsoon: number[] };
+  peoples?: { id: number; name: string; color: [number, number, number] }[];
 };
 
 export type ClimateSpec = { min: number; max: number; scale: string; unit: string };

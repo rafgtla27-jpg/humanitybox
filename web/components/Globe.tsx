@@ -23,6 +23,8 @@ type Props = {
   onPick?: (lat: number, lon: number) => void;
   /** Identité de la scène : la scène 3D n'est recréée que si elle change (monde vivant : constante) */
   sceneKey?: string;
+  /** Recentrer la vue sur un point (suivre son peuple de cœur) ; `key` change à chaque demande */
+  flyTo?: { lat: number; lon: number; key: number };
 };
 
 /** Champ d'étoiles fixe (générateur pseudo-aléatoire déterministe). */
@@ -58,7 +60,8 @@ function directionFor(lonDeg: number, latDeg: number) {
   return new THREE.Vector3(Math.cos(lat) * Math.cos(lon), Math.sin(lat), -Math.cos(lat) * Math.sin(lon));
 }
 
-export default function Globe({ data, frame, layer, space = false, className = "globe", onError, sprites = false, onSpriteScale, onPick, sceneKey }: Props) {
+export default function Globe({ data, frame, layer, space = false, className = "globe", onError, sprites = false, onSpriteScale, onPick, sceneKey, flyTo }: Props) {
+  const camRef = useRef<THREE.PerspectiveCamera | null>(null);
   const dataRef = useRef(data);
   dataRef.current = data;
   const onPickRef = useRef(onPick);
@@ -170,6 +173,7 @@ export default function Globe({ data, frame, layer, space = false, className = "
     const animate = !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const clock = new THREE.Clock();
 
+    camRef.current = camera;
     const controls = new OrbitControls(camera, renderer.domElement);
     // Niveau de détail des figures : de près, on ne garnit que la région regardée, plus finement
     const refresh = () => {
@@ -270,6 +274,27 @@ export default function Globe({ data, frame, layer, space = false, className = "
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, space, sprites]);
+
+  // Vol doux vers un point (≈ 1 s), à distance constante
+  useEffect(() => {
+    const cam = camRef.current;
+    if (!flyTo || !cam) return;
+    const dist = cam.position.length();
+    const from = cam.position.clone().normalize();
+    const la = (flyTo.lat * Math.PI) / 180, lo = (flyTo.lon * Math.PI) / 180;
+    const to = new THREE.Vector3(Math.cos(la) * Math.cos(lo), Math.sin(la), -Math.cos(la) * Math.sin(lo));
+    const t0 = performance.now();
+    let raf = 0;
+    const anim = () => {
+      const t = Math.min(1, (performance.now() - t0) / 1000);
+      const e = t * t * (3 - 2 * t);
+      cam.position.copy(from.clone().lerp(to, e).normalize().multiplyScalar(dist));
+      cam.lookAt(0, 0, 0);
+      if (t < 1) raf = requestAnimationFrame(anim); else refreshRef.current();
+    };
+    anim();
+    return () => cancelAnimationFrame(raf);
+  }, [flyTo?.key]);
 
   // Rendu sur la carte graphique dès que le relief est chargé (mode espace)
   useEffect(() => {

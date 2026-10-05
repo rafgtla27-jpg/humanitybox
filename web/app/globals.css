@@ -210,3 +210,21 @@ button { font: inherit; color: inherit; }
 .chronicle li { font-size: 0.8rem; color: #d8d8d2; background: rgba(16, 16, 18, 0.55); padding: 4px 8px; border-radius: 6px; }
 .chronicle b { color: #e3a13b; font-weight: 600; margin-right: 4px; }
 @media (max-width: 640px) { .powers { top: auto; bottom: 110px; transform: none; grid-auto-flow: column; } .chronicle { display: none; } .speeds { display: none; } }
+
+/* ---------- Peuples et peuple de cœur ---------- */
+.power-hint.muted { color: #9a9a95; background: rgba(16, 16, 18, 0.55); }
+.fav-chip { position: absolute; top: max(16px, env(safe-area-inset-top)); left: 16px; border: 1px solid rgba(255, 120, 140, 0.5); background: rgba(16, 16, 18, 0.6); color: #ffd7de; border-radius: 999px; padding: 8px 14px; cursor: pointer; font-size: 0.9rem; backdrop-filter: blur(8px); }
+.fav-chip span { color: #ff6f8a; }
+.people-panel { position: absolute; right: 16px; top: 72px; width: min(320px, calc(100% - 32px)); padding: 16px 18px; border-radius: 14px; background: rgba(16, 16, 18, 0.82); border: 1px solid rgba(255, 255, 255, 0.12); color: #e9e9e6; backdrop-filter: blur(12px); }
+.people-panel h2 { margin: 0; font-family: var(--serif); font-weight: 500; font-size: 1.5rem; display: flex; align-items: center; gap: 10px; }
+.people-panel h2 i { width: 14px; height: 14px; border-radius: 3px; display: inline-block; }
+.people-panel .sub { margin: 4px 0 12px; color: #9a9a95; font-size: 0.85rem; }
+.people-panel dl { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; margin: 0 0 12px; }
+.people-panel dt { color: #9a9a95; font-size: 0.75rem; }
+.people-panel dd { margin: 0; font-variant-numeric: tabular-nums; }
+.people-panel .actions { display: grid; gap: 6px; }
+.people-panel .actions button { border: 1px solid rgba(255, 255, 255, 0.15); background: transparent; color: #e9e9e6; border-radius: 8px; padding: 8px 10px; cursor: pointer; text-align: left; }
+.people-panel .actions button.on { border-color: #ff6f8a; color: #ffd7de; background: rgba(255, 111, 138, 0.12); }
+.people-panel .close { position: absolute; top: 8px; right: 10px; border: 0; background: transparent; color: #9a9a95; font-size: 1.3rem; cursor: pointer; }
+.people-panel .story { list-style: none; margin: 12px 0 0; padding: 10px 0 0; border-top: 1px solid rgba(255, 255, 255, 0.08); display: grid; gap: 4px; font-size: 0.8rem; color: #cfcfca; }
+.people-panel .story b, .chronicle li.fav b { color: #ff9fb2; }

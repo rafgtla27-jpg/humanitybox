@@ -87,7 +87,7 @@ Ce qu'on garde de WORLD_SIM : un monde réel et des causes logiques ; le joueur 
 - **G2 — Pouvoirs divins** (6 premiers pouvoirs en 0.7.0) branchés sur les causes du modèle : sécheresse / pluie, coup de froid,
   volcan, épidémie, bénédiction de fertilité, aimant divin (déplacer un groupe), faire naître un
   groupe, offrir une technique (feu, bateau, semence).
-- **G3 — Peuples émergents et peuple de cœur** : un trait culturel neutre qui dérive et se mélange
+- **G3 — Peuples émergents et peuple de cœur** (fait, 0.8.0, monde vivant) : un trait culturel neutre qui dérive et se mélange
   regroupe les cohortes en peuples (nom, couleur, bannière) ; le joueur s'attache à un peuple, le
   suit, reçoit sa chronique (premier village, famine, migration, rencontre).
 - **G4 — Villages, royaumes, guerres** : V0.6–V0.8 de la roadmap, vus comme un jeu.
